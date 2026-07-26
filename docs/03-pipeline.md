@@ -35,7 +35,7 @@ Cancel
 | Bulkhead | 2 |
 | Atomic | 3 |
 
-Порядок аргументов в `Useful` не важен.
+Порядок аргументов в `Configure` не важен.
 
 Подробно по каждой политике: **[08-policies.md](08-policies.md)**.
 

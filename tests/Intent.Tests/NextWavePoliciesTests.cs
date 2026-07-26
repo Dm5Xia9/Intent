@@ -25,7 +25,7 @@ public class NextWavePoliciesTests
         };
 
         await Intent.Run(body)
-            .Useful(Intent.Retry(3, attemptTimeout: 40.Milliseconds()));
+            .Configure(Intent.Retry(3, attemptTimeout: 40.Milliseconds()));
 
         Assert.Equal(2, attempts);
     }
@@ -38,11 +38,11 @@ public class NextWavePoliciesTests
         for (var i = 0; i < 3; i++)
         {
             await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-                await Intent.Run(boom).Useful(Intent.CircuitBreaker("cb1", failureThreshold: 3, breakDuration: 5.Seconds())));
+                await Intent.Run(boom).Configure(Intent.CircuitBreaker("cb1", failureThreshold: 3, breakDuration: 5.Seconds())));
         }
 
         await Assert.ThrowsAsync<IntentCircuitOpenException>(async () =>
-            await Intent.Run(boom).Useful(Intent.CircuitBreaker("cb1", failureThreshold: 3, breakDuration: 5.Seconds())));
+            await Intent.Run(boom).Configure(Intent.CircuitBreaker("cb1", failureThreshold: 3, breakDuration: 5.Seconds())));
     }
 
     [Fact]
@@ -52,15 +52,15 @@ public class NextWavePoliciesTests
         var policy = Intent.CircuitBreaker("cb2", failureThreshold: 2, breakDuration: 30.Milliseconds());
 
         for (var i = 0; i < 2; i++)
-            await Assert.ThrowsAsync<InvalidOperationException>(async () => await Intent.Run(boom).Useful(policy));
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await Intent.Run(boom).Configure(policy));
 
         await Assert.ThrowsAsync<IntentCircuitOpenException>(async () =>
-            await Intent.Run(boom).Useful(policy));
+            await Intent.Run(boom).Configure(policy));
 
         await Task.Delay(40);
 
-        await Intent.Run(() => { }).Useful(policy);
-        await Intent.Run(() => { }).Useful(policy);
+        await Intent.Run(() => { }).Configure(policy);
+        await Intent.Run(() => { }).Configure(policy);
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public class NextWavePoliciesTests
         ActivitySource.AddActivityListener(listener);
 
         await Intent.Run(() => { })
-            .Useful(Intent.Named("ActDemo"), Intent.Activity);
+            .Configure(Intent.Named("ActDemo"), Intent.Activity);
 
         Assert.NotNull(seen);
         Assert.Equal("ActDemo", seen!.DisplayName);
@@ -142,7 +142,7 @@ public class NextWavePoliciesTests
                 await Task.Delay(40);
                 Interlocked.Decrement(ref inFlight);
             };
-            await Intent.Run(body).Useful(Intent.Bulkhead("bh", maxParallelism: 2));
+            await Intent.Run(body).Configure(Intent.Bulkhead("bh", maxParallelism: 2));
         }
 
         await Task.WhenAll(Work(), Work(), Work(), Work());

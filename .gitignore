@@ -5,3 +5,7 @@ obj/
 *.suo
 *.DotSettings.user
 TestResults/
+artifacts/
+*.nupkg
+*.snupkg
+.DS_Store

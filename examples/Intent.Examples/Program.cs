@@ -45,7 +45,7 @@ static async Task RetryAndTimeout()
     };
 
     await Intent.Run(request)
-        .Useful(
+        .Configure(
             Intent.Retry(3, IntentBackoff.Constant(20.Milliseconds())),
             Intent.Timeout(5.Seconds())
         );
@@ -78,7 +78,7 @@ static async Task CombinedPolicies()
     Console.WriteLine("-- Combined policies --");
 
     await Intent.Run(() => Console.WriteLine("  Named + Metrics + Retry + Atomic"))
-        .Useful(
+        .Configure(
             Intent.Named("CombinedDemo"),
             Intent.Metrics,
             Intent.AtomicOn("combined"),
@@ -102,8 +102,8 @@ static async Task CacheAndDiagnostics()
         return 42;
     };
 
-    AssertEqual(42, await Intent.Run(load).Useful(Intent.Cache("answer", 5.Seconds())));
-    AssertEqual(42, await Intent.Run(load).Useful(Intent.Cache("answer", 5.Seconds())));
+    AssertEqual(42, await Intent.Run(load).Configure(Intent.Cache("answer", 5.Seconds())));
+    AssertEqual(42, await Intent.Run(load).Configure(Intent.Cache("answer", 5.Seconds())));
     Console.WriteLine($"  body ran {calls} time(s)");
     Console.WriteLine();
 }
@@ -121,7 +121,7 @@ static async Task CompositionDemo()
         Intent.Run(() => Console.WriteLine("  Sequence 2")));
 
     await Intent.Run(() => Console.WriteLine("  Bulkhead slot"))
-        .Useful(Intent.Bulkhead("demo", 4), Intent.Named("BulkDemo"), Intent.Activity);
+        .Configure(Intent.Bulkhead("demo", 4), Intent.Named("BulkDemo"), Intent.Activity);
 
     Console.WriteLine();
 }
@@ -132,11 +132,11 @@ static async Task IdempotentAndThenDemo()
 
     var calls = 0;
     var policy = Intent.Idempotent("ex-once", 5.Seconds());
-    await Intent.Run(() => { calls++; Console.WriteLine($"  idempotent body #{calls}"); }).Useful(policy);
-    await Intent.Run(() => { calls++; Console.WriteLine($"  idempotent body #{calls}"); }).Useful(policy);
+    await Intent.Run(() => { calls++; Console.WriteLine($"  idempotent body #{calls}"); }).Configure(policy);
+    await Intent.Run(() => { calls++; Console.WriteLine($"  idempotent body #{calls}"); }).Configure(policy);
 
     await Intent.Run(() => Console.WriteLine("  IntentProfile.Http"))
-        .Useful(IntentProfile.Http("ex-http"));
+        .Configure(IntentProfile.Http("ex-http"));
 
     var n = await Intent.Run(() => 21)
         .Then(x => Intent.Run(() => x * 2))

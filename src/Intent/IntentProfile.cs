@@ -1,7 +1,7 @@
 namespace Intents;
 
 /// <summary>
-/// Ready-made policy packs for common scenarios. Pass to <see cref="Intent.Useful"/>.
+/// Ready-made policy packs for common scenarios. Pass to <see cref="Intent.Configure"/>.
 /// </summary>
 public static class IntentProfile
 {

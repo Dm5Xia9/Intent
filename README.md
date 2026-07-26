@@ -1,31 +1,32 @@
 # Intent — модель отложенного выполнения
 
-`Intent` отделяет **что выполнить** от **как выполнить**. Вызов метода возвращает «холодный» план; код стартует только после `Useful` и `await`.
+`Intent` — это намерение выполнить работу: вызов метода создаёт холодный план, а не запускает код. План описывает **что** сделать; через `Configure` к нему цепляют политики — **как** выполнять (retry, timeout, идемпотентность, изоляция…). Реальное выполнение начинается на `await`. Один и тот же метод можно запускать в разных режимах, не меняя его тело.
 
-**Начни отсюда:** [docs/00-buy-me.md](docs/00-buy-me.md) — зачем это нужно и какие киллер-фичи ты получаешь.  
 Полная документация: **[docs/](docs/README.md)**.
 
 ## Быстрый старт
 
 ```csharp
-await ProcessOrder()
-    .Useful(
-        Intent.Named("Checkout"),
-        Intent.Tag("orderId", orderId),
-        Intent.Activity,
-        Intent.Metrics,
-        Intent.Idempotent($"order:{orderId}"),
-        Intent.CircuitBreaker("checkout"),
-        Intent.Bulkhead("io", maxParallelism: 8),
-        Intent.AtomicOn("order"),
-        Intent.Retry(3, IntentBackoff.Exponential(100.Milliseconds()), attemptTimeout: 2.Seconds()),
-        Intent.Timeout(10.Seconds()),
-        Intent.Cancel(ct)
-    );
+async Intent ProcessOrder(string orderId)
+{
+    Validate(orderId);
+    await SaveAsync(orderId);
+    await NotifyAsync(orderId);
+}
 
-// или готовый профиль:
-await CallHttp().Useful(IntentProfile.Http("payments"));
+// холодный план — тело ещё не выполняется
+var plan = ProcessOrder("42");
+
+plan.Configure(
+    Intent.Named("Checkout"),
+    Intent.Retry(3),
+    Intent.Timeout(10.Seconds())
+);
+
+await plan; // только здесь стартует pipeline + тело
 ```
+
+> **Внимание.** `Intent` опирается на механизм `Task` (awaiter, `TaskCompletionSource`, thread pool), но сам **не является** `Task`: его нельзя передать туда, где ждут `Task`/`Task<T>`, и вызов метода с `async Intent` не стартует работу — в отличие от `async Task`.
 
 ## Политики
 
@@ -51,7 +52,7 @@ Cancel → Named → Tag → Trace → Activity → Metrics → Idempotent → C
 ```csharp
 await Intent.WhenAll(a, b, c);
 await Intent.Sequence(a, b, c);
-Intent.Run(Work).Useful(Intent.Retry(3)).Background();
+Intent.Run(Work).Configure(Intent.Retry(3)).Background();
 
 var total = await Intent.Run(() => Load(id))
     .Then(x => Intent.Run(() => Enrich(x)))
@@ -62,3 +63,21 @@ var total = await Intent.Run(() => Load(id))
 dotnet test
 dotnet run --project examples/Intent.Examples
 ```
+
+## NuGet
+
+Пакет: **Intent**. Публикация идёт из GitHub Actions по тегу `v*.*.*`.
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Workflow `.github/workflows/publish.yml` прогоняет тесты, пакует `src/Intent`, пушит на nuget.org и создаёт GitHub Release.
+
+**Авторизация (один из вариантов):**
+
+1. **Trusted Publishing (предпочтительно):** на [nuget.org → Trusted Publishing](https://www.nuget.org/account/trusted-publishing) добавь policy: owner/repo, workflow file `publish.yml`. В GitHub Secrets — `NUGET_USER` (username на nuget.org, не email).
+2. **API key:** секрет `NUGET_API_KEY` с ключом с nuget.org.
+
+CI на каждый push/PR: `.github/workflows/ci.yml`.

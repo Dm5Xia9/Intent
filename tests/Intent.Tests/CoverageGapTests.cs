@@ -37,7 +37,7 @@ public class CoverageGapTests
             return 9;
         }
 
-        Assert.Equal(9, await Intent.Defer(() => Flaky()).Useful(Intent.Retry(3)));
+        Assert.Equal(9, await Intent.Defer(() => Flaky()).Configure(Intent.Retry(3)));
         Assert.Equal(3, attempts);
     }
 
@@ -79,7 +79,7 @@ public class CoverageGapTests
                 throw new InvalidOperationException("fail");
         }
 
-        await Flaky().Useful(Intent.Retry(3));
+        await Flaky().Configure(Intent.Retry(3));
         Assert.Equal(3, attempts);
     }
 
@@ -97,22 +97,22 @@ public class CoverageGapTests
             return 42;
         }
 
-        Assert.Equal(42, await Flaky().Useful(Intent.Retry(3)));
+        Assert.Equal(42, await Flaky().Configure(Intent.Retry(3)));
         Assert.Equal(3, attempts);
     }
 
     [Fact]
-    public async Task Intent_T_Useful_after_schedule_throws()
+    public async Task Intent_T_Configure_after_schedule_throws()
     {
         var intent = Intent.Run(() => 1);
         await intent;
-        Assert.Throws<InvalidOperationException>(() => intent.Useful(Intent.Retry(1)));
+        Assert.Throws<InvalidOperationException>(() => intent.Configure(Intent.Retry(1)));
     }
 
     [Fact]
-    public async Task Intent_T_Useful_configures_before_run()
+    public async Task Intent_T_Configure_configures_before_run()
     {
-        var intent = Intent.Run(() => 1).Useful(Intent.Retry(1));
+        var intent = Intent.Run(() => 1).Configure(Intent.Retry(1));
         Assert.Equal(IntentLifecycle.Configured, intent.Lifecycle);
         Assert.Equal(1, await intent);
     }
@@ -211,8 +211,8 @@ public class CoverageGapTests
         Assert.Throws<ArgumentNullException>(() => Intent.Run((Func<int>)null!));
         Assert.Throws<ArgumentNullException>(() => Intent.Run((Func<Task<int>>)null!));
         Assert.Throws<ArgumentNullException>(() => Intent.Defer((Func<Intent<int>>)null!));
-        Assert.Throws<ArgumentNullException>(() => Intent.Run(() => { }).Useful(null!));
-        Assert.Throws<ArgumentNullException>(() => Intent.Run(() => 1).Useful(null!));
+        Assert.Throws<ArgumentNullException>(() => Intent.Run(() => { }).Configure(null!));
+        Assert.Throws<ArgumentNullException>(() => Intent.Run(() => 1).Configure(null!));
     }
 
     [Fact]
@@ -466,9 +466,9 @@ public class CoverageGapTests
     }
 
     [Fact]
-    public void Useful_rejects_null_policies_array_on_Intent_T()
+    public void Configure_rejects_null_policies_array_on_Intent_T()
     {
-        Assert.Throws<ArgumentNullException>(() => new Intent<int>().Useful(null!));
+        Assert.Throws<ArgumentNullException>(() => new Intent<int>().Configure(null!));
     }
 
     private sealed class DummyStateMachine : IAsyncStateMachine

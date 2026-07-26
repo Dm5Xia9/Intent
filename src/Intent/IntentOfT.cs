@@ -85,7 +85,7 @@ public class Intent<T>
         _tcs.TrySetException(exception);
     }
 
-    public Intent<T> Useful(params IntentPolicy[] policies)
+    public Intent<T> Configure(params IntentPolicy[] policies)
     {
         ArgumentNullException.ThrowIfNull(policies);
         if (_lifecycle is IntentLifecycle.Scheduled or IntentLifecycle.Running or IntentLifecycle.Completed)

@@ -13,7 +13,7 @@ public class RetryPolicyTests
                 if (attempts < 3)
                     throw new InvalidOperationException("fail");
             })
-            .Useful(Intent.Retry(3));
+            .Configure(Intent.Retry(3));
 
         Assert.Equal(3, attempts);
     }
@@ -29,7 +29,7 @@ public class RetryPolicyTests
         };
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await Intent.Run(body).Useful(Intent.Retry(3)));
+            await Intent.Run(body).Configure(Intent.Retry(3)));
 
         Assert.Equal(3, attempts);
         Assert.Equal("fail-3", ex.Message);
@@ -48,7 +48,7 @@ public class RetryPolicyTests
             await Task.Yield();
         }
 
-        await Flaky().Useful(Intent.Retry(3));
+        await Flaky().Configure(Intent.Retry(3));
         Assert.Equal(3, attempts);
     }
 }

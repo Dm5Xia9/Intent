@@ -15,14 +15,14 @@ public class CompositionTests
         };
 
         await Assert.ThrowsAsync<TimeoutException>(async () =>
-            await Intent.Run(body).Useful(Intent.Retry(10), Intent.Timeout(150.Milliseconds())));
+            await Intent.Run(body).Configure(Intent.Retry(10), Intent.Timeout(150.Milliseconds())));
 
         Assert.True(attempts < 10, $"attempts={attempts}");
         Assert.True(attempts >= 1, $"attempts={attempts}");
     }
 
     [Fact]
-    public async Task Combined_policies_normalize_order_regardless_of_Useful_argument_order()
+    public async Task Combined_policies_normalize_order_regardless_of_Configure_argument_order()
     {
         var attempts = 0;
         await Intent.Run(() =>
@@ -31,7 +31,7 @@ public class CompositionTests
                 if (attempts < 2)
                     throw new InvalidOperationException("fail");
             })
-            .Useful(Intent.Atomic, Intent.Retry(3), Intent.Timeout(5.Seconds()));
+            .Configure(Intent.Atomic, Intent.Retry(3), Intent.Timeout(5.Seconds()));
 
         Assert.Equal(2, attempts);
     }

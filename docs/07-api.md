@@ -45,17 +45,17 @@ Backoff: `IntentBackoff.Constant` / `Exponential`.
 
 ```csharp
 await Intent.Run(async ct => await client.GetAsync(url, ct))
-    .Useful(IntentProfile.Http("Fetch"), Intent.Cancel(ct));
+    .Configure(IntentProfile.Http("Fetch"), Intent.Cancel(ct));
 
 await Intent.Run(() => Charge(cmd))
-    .Useful(
+    .Configure(
         Intent.Idempotent($"pay:{cmd.Key}"),
         Intent.Named("Charge"),
         Intent.Tag("userId", cmd.UserId),
         Intent.Retry(3));
 
 await Intent.WhenAll(LoadA(), LoadB());
-LoadC().Useful(Intent.Retry(2)).Background();
+LoadC().Configure(Intent.Retry(2)).Background();
 ```
 
 ## Ограничения

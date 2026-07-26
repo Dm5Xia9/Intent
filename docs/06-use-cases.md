@@ -12,7 +12,7 @@ await Checkout(cart);
 
 // Worker: терпеливо + наблюдаемость
 await Checkout(cart)
-    .Useful(
+    .Configure(
         Intent.Named("Checkout"),
         Intent.Activity,
         Intent.Metrics,
@@ -28,7 +28,7 @@ await Checkout(cart)
 
 ```csharp
 await Intent.Run(() => Charge(cmd))
-    .Useful(
+    .Configure(
         Intent.Idempotent($"pay:{cmd.IdempotencyKey}"),
         Intent.Retry(3),
         Intent.Timeout(10.Seconds()));
@@ -47,7 +47,7 @@ await Intent.Atomically(() =>
 
 // Разные ресурсы — разные ключи
 await Intent.Atomically("wallet:42", () => Debit(42));
-await Transfer().Useful(Intent.AtomicOn("account:7"));
+await Transfer().Configure(Intent.AtomicOn("account:7"));
 ```
 
 Структуры остаются простыми; синхронизация — политика.
@@ -56,7 +56,7 @@ await Transfer().Useful(Intent.AtomicOn("account:7"));
 
 ```csharp
 await LoadProfile(userId)
-    .Useful(
+    .Configure(
         Intent.Named("LoadProfile"),
         Intent.Trace,
         Intent.Activity,
@@ -71,7 +71,7 @@ await LoadProfile(userId)
 
 ```csharp
 await Intent.Run(async ct => await http.GetAsync(url, ct))
-    .Useful(
+    .Configure(
         Intent.Named("HttpGet"),
         Intent.CircuitBreaker("payments-api"),
         Intent.Bulkhead("http", maxParallelism: 32),
@@ -92,7 +92,7 @@ var batch = orders.Select(o => Process(o)).ToList();
 if (dryRun) return;
 
 await Intent.WhenAll(batch.ToArray())
-    .Useful(Intent.Bulkhead("orders", 8), Intent.Retry(2));
+    .Configure(Intent.Bulkhead("orders", 8), Intent.Retry(2));
 ```
 
 С `Task` к моменту `Select` работа уже могла стартовать.
@@ -105,7 +105,7 @@ await Intent.Sequence(Validate(), Save(), Notify());
 await Intent.WhenAll(WarmCacheA(), WarmCacheB());
 
 // Явный background с отчётом об ошибке в IntentDiagnostics
-RefreshAsync().Useful(Intent.Retry(2)).Background();
+RefreshAsync().Configure(Intent.Retry(2)).Background();
 ```
 
 ### 7. Тесты политик отдельно от домена
@@ -114,7 +114,7 @@ RefreshAsync().Useful(Intent.Retry(2)).Background();
 
 ```csharp
 await Intent.Run(Flaky)
-    .Useful(Intent.Retry(3, shouldRetry: ex => ex is HttpRequestException));
+    .Configure(Intent.Retry(3, shouldRetry: ex => ex is HttpRequestException));
 ```
 
 ## Где Intent не нужен
@@ -126,12 +126,12 @@ await Intent.Run(Flaky)
 
 ## Антипаттерны
 
-### Навесить Useful после старта
+### Навесить Configure после старта
 
 ```csharp
 var i = Work();
 await i;
-i.Useful(Intent.Retry(3)); // бросит
+i.Configure(Intent.Retry(3)); // бросит
 ```
 
 ### Думать, что Atomic / AtomicOn / Bulkhead / Circuit / Cache — распределённые
@@ -152,11 +152,11 @@ ProcessOrder().Background(); // так: schedule + ошибки в diagnostics
 ### Политики на WhenAll ≠ политики на детях
 
 ```csharp
-await Intent.WhenAll(a, b).Useful(Intent.Retry(3));
+await Intent.WhenAll(a, b).Configure(Intent.Retry(3));
 // Retry оборачивает весь WhenAll, а не каждый из a/b отдельно
 ```
 
-Если нужен ретрай на каждый child — вешайте `Useful` на `a` и `b`.
+Если нужен ретрай на каждый child — вешайте `Configure` на `a` и `b`.
 
 ### Заменить все Task на Intent «для красоты»
 

@@ -1,7 +1,7 @@
 namespace Intents;
 
 /// <summary>
-/// A capability that wraps the next stage of execution (passed to <see cref="Intent.Useful"/>).
+/// A capability that wraps the next stage of execution (passed to <see cref="Intent.Configure"/>).
 /// </summary>
 public interface IntentPolicy
 {

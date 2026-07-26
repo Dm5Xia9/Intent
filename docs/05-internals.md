@@ -69,7 +69,7 @@ _body = ExecuteStateMachineAsync;
 3. `clone.MoveNext()`.
 4. Ждёт `_smRun`.
 
-Так `await Flaky().Useful(Intent.Retry(3))` работает без `Defer`: каждая попытка — свежая state machine с capturenными аргументами исходного вызова.
+Так `await Flaky().Configure(Intent.Retry(3))` работает без `Defer`: каждая попытка — свежая state machine с capturenными аргументами исходного вызова.
 
 Когда SM доходит до конца, builder зовёт `SetResult`/`SetException` → завершается `_smRun`, а не сразу внешний TCS. Внешний TCS завершает `RunPipelineAsync` после выхода из pipeline (успех) или через `FaultOuter` (ошибка).
 

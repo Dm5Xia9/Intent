@@ -4,11 +4,11 @@
 
 `Intent` — это **описание намерения выполнить работу**, а не сама работа.
 
-Вызов метода создаёт план. План можно настроить политиками (`Useful`). Реальное выполнение начинается только при `await` (или явном `Schedule`).
+Вызов метода создаёт план. План можно настроить политиками (`Configure`). Реальное выполнение начинается только при `await` (или явном `Schedule`).
 
 ```csharp
 var plan = ProcessOrder();              // Created: код ProcessOrder ещё не бежал
-plan = plan.Useful(Intent.Retry(3));    // Configured: политики прикреплены
+plan = plan.Configure(Intent.Retry(3));    // Configured: политики прикреплены
 await plan;                             // Scheduled → Running → Completed
 ```
 
@@ -33,7 +33,7 @@ await plan;                             // Scheduled → Running → Completed
 | Возможность | Статус |
 |-------------|--------|
 | Отложенный `async Intent` / `async Intent<T>` | Есть |
-| `Useful` + нормализованный pipeline | Есть |
+| `Configure` + нормализованный pipeline | Есть |
 | Retry, Timeout, Atomic / AtomicOn, Cancel, Bulkhead, CircuitBreaker | Есть |
 | Named, Trace, Activity, Metrics, Cache | Есть |
 | WhenAll, Sequence, Background | Есть |
@@ -47,8 +47,6 @@ await plan;                             // Scheduled → Running → Completed
 - **Не** actor framework и не distributed saga engine.
 
 Это тонкий слой **над** механизмом awaitables CLR: cold execution + policy pipeline.
-
-Если ещё не читал «зачем вообще» — начни с **[00-buy-me.md](00-buy-me.md)**.
 
 ## Главный принцип
 

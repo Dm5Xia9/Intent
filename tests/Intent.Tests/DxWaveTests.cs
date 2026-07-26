@@ -20,8 +20,8 @@ public class DxWaveTests
         var calls = 0;
         var policy = Intent.Idempotent("void-once", 5.Seconds());
 
-        await Intent.Run(() => Interlocked.Increment(ref calls)).Useful(policy);
-        await Intent.Run(() => Interlocked.Increment(ref calls)).Useful(policy);
+        await Intent.Run(() => Interlocked.Increment(ref calls)).Configure(policy);
+        await Intent.Run(() => Interlocked.Increment(ref calls)).Configure(policy);
 
         Assert.Equal(1, calls);
     }
@@ -36,13 +36,13 @@ public class DxWaveTests
         {
             Interlocked.Increment(ref calls);
             return 7;
-        }).Useful(policy);
+        }).Configure(policy);
 
         var b = await Intent.Run(() =>
         {
             Interlocked.Increment(ref calls);
             return 99;
-        }).Useful(policy);
+        }).Configure(policy);
 
         Assert.Equal(7, a);
         Assert.Equal(7, b);
@@ -62,7 +62,7 @@ public class DxWaveTests
                 Interlocked.Increment(ref calls);
                 await gate.Task;
                 return 42;
-            }).Useful(policy);
+            }).Configure(policy);
 
         var t1 = Start();
         var t2 = Start();
@@ -86,9 +86,9 @@ public class DxWaveTests
             {
                 Interlocked.Increment(ref calls);
                 throw new InvalidOperationException("boom");
-            }).Useful(policy));
+            }).Configure(policy));
 
-        await Intent.Run(() => Interlocked.Increment(ref calls)).Useful(policy);
+        await Intent.Run(() => Interlocked.Increment(ref calls)).Configure(policy);
         Assert.Equal(2, calls);
     }
 
@@ -114,7 +114,7 @@ public class DxWaveTests
         ActivitySource.AddActivityListener(listener);
 
         await Intent.Run(() => { })
-            .Useful(
+            .Configure(
                 Intent.Named("Tagged"),
                 Intent.Tag("userId", "u1"),
                 Intent.Trace,
@@ -127,7 +127,7 @@ public class DxWaveTests
     [Fact]
     public async Task Profile_Http_applies_named_metrics()
     {
-        await Intent.Run(() => { }).Useful(IntentProfile.Http("demo-http"));
+        await Intent.Run(() => { }).Configure(IntentProfile.Http("demo-http"));
         Assert.Equal(1, IntentMetrics.GetCount("demo-http"));
     }
 
@@ -143,7 +143,7 @@ public class DxWaveTests
             max = Math.Max(max, n);
             await Task.Delay(40);
             Interlocked.Decrement(ref depth);
-        }).Useful(IntentProfile.DbWrite("dbw", atomicKey: "dbw"));
+        }).Configure(IntentProfile.DbWrite("dbw", atomicKey: "dbw"));
 
         await Intent.WhenAll(Make(), Make(), Make());
         Assert.Equal(1, max);

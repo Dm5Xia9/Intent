@@ -21,14 +21,14 @@ Created → Configured → Scheduled → Running → Completed
 
 ## Configured
 
-После первого `Useful(...)`:
+После первого `Configure(...)`:
 
 ```csharp
-intent.Useful(Intent.Retry(3), Intent.Timeout(5.Seconds()));
+intent.Configure(Intent.Retry(3), Intent.Timeout(5.Seconds()));
 ```
 
-Политики накапливаются в списке. Повторный `Useful` до старта — дополняет список.  
-`Useful` **после** `Scheduled`/`Running`/`Completed` бросает `InvalidOperationException`.
+Политики накапливаются в списке. Повторный `Configure` до старта — дополняет список.  
+`Configure` **после** `Scheduled`/`Running`/`Completed` бросает `InvalidOperationException`.
 
 ## Scheduled
 
@@ -66,7 +66,7 @@ intent.Useful(Intent.Retry(3), Intent.Timeout(5.Seconds()));
 | Действие | Код пользователя |
 |----------|------------------|
 | `var x = ProcessOrder()` | Нет |
-| `x.Useful(...)` | Нет |
+| `x.Configure(...)` | Нет |
 | передать `x` в другой метод | Нет |
 | `await x` | Да (через pipeline) |
 

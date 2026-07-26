@@ -23,7 +23,7 @@ public class NewPoliciesTests
         };
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-            await Intent.Run(body).Useful(Intent.Cancel(cts.Token)));
+            await Intent.Run(body).Configure(Intent.Cancel(cts.Token)));
     }
 
     [Fact]
@@ -40,7 +40,7 @@ public class NewPoliciesTests
 
         cts.CancelAfter(30);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-            await Intent.Run(body).Useful(Intent.Cancel(cts.Token)));
+            await Intent.Run(body).Configure(Intent.Cancel(cts.Token)));
         Assert.True(entered);
     }
 
@@ -61,7 +61,7 @@ public class NewPoliciesTests
                 await Task.Delay(40);
                 Interlocked.Decrement(ref a);
             };
-            await Intent.Run(body).Useful(Intent.AtomicOn("a"));
+            await Intent.Run(body).Configure(Intent.AtomicOn("a"));
         }
 
         async Task WorkB()
@@ -73,7 +73,7 @@ public class NewPoliciesTests
                 await Task.Delay(40);
                 Interlocked.Decrement(ref b);
             };
-            await Intent.Run(body).Useful(Intent.AtomicOn("b"));
+            await Intent.Run(body).Configure(Intent.AtomicOn("b"));
         }
 
         await Task.WhenAll(WorkA(), WorkA(), WorkB(), WorkB());
@@ -93,7 +93,7 @@ public class NewPoliciesTests
                 if (attempts < 3)
                     throw new InvalidOperationException("x");
             })
-            .Useful(Intent.Retry(3, IntentBackoff.Constant(30.Milliseconds())));
+            .Configure(Intent.Retry(3, IntentBackoff.Constant(30.Milliseconds())));
 
         sw.Stop();
         Assert.Equal(3, attempts);
@@ -110,7 +110,7 @@ public class NewPoliciesTests
                     attempts++;
                     throw new InvalidOperationException("nope");
                 })
-                .Useful(Intent.Retry(5, shouldRetry: ex => ex is TimeoutException)));
+                .Configure(Intent.Retry(5, shouldRetry: ex => ex is TimeoutException)));
 
         Assert.Equal(1, attempts);
     }
@@ -124,7 +124,7 @@ public class NewPoliciesTests
         IntentDiagnostics.Measured += e => metrics.Add(e);
 
         await Intent.Run(() => { })
-            .Useful(Intent.Named("Checkout"), Intent.Trace, Intent.Metrics);
+            .Configure(Intent.Named("Checkout"), Intent.Trace, Intent.Metrics);
 
         Assert.Contains(traces, t => t.Name == "Checkout" && t.Phase == IntentTracePhase.Started);
         Assert.Contains(traces, t => t.Name == "Checkout" && t.Phase == IntentTracePhase.Succeeded);
@@ -143,8 +143,8 @@ public class NewPoliciesTests
             return 7;
         };
 
-        Assert.Equal(7, await Intent.Run(body).Useful(Intent.Cache("k1", 1.Seconds())));
-        Assert.Equal(7, await Intent.Run(body).Useful(Intent.Cache("k1", 1.Seconds())));
+        Assert.Equal(7, await Intent.Run(body).Configure(Intent.Cache("k1", 1.Seconds())));
+        Assert.Equal(7, await Intent.Run(body).Configure(Intent.Cache("k1", 1.Seconds())));
         Assert.Equal(1, calls);
     }
 
@@ -158,9 +158,9 @@ public class NewPoliciesTests
             return calls;
         };
 
-        Assert.Equal(1, await Intent.Run(body).Useful(Intent.Cache("exp", 40.Milliseconds())));
+        Assert.Equal(1, await Intent.Run(body).Configure(Intent.Cache("exp", 40.Milliseconds())));
         await Task.Delay(60);
-        Assert.Equal(2, await Intent.Run(body).Useful(Intent.Cache("exp", 40.Milliseconds())));
+        Assert.Equal(2, await Intent.Run(body).Configure(Intent.Cache("exp", 40.Milliseconds())));
         Assert.Equal(2, calls);
     }
 

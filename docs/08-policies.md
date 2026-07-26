@@ -13,10 +13,10 @@ public interface IntentPolicy
 Навешивание:
 
 ```csharp
-await work.Useful(Intent.Retry(3), Intent.Timeout(5.Seconds()));
+await work.Configure(Intent.Retry(3), Intent.Timeout(5.Seconds()));
 ```
 
-Порядок в `Useful` **не важен** — pipeline сортирует по `Order`. Общая схема: [03-pipeline.md](03-pipeline.md).
+Порядок в `Configure` **не важен** — pipeline сортирует по `Order`. Общая схема: [03-pipeline.md](03-pipeline.md).
 
 Ниже — каждая встроенная политика: зачем, API, поведение, ограничения.
 
@@ -48,7 +48,7 @@ await work.Useful(Intent.Retry(3), Intent.Timeout(5.Seconds()));
 
 ```csharp
 await Intent.Run(async ct => await client.GetAsync(url, ct))
-    .Useful(Intent.Cancel(ct), Intent.Timeout(5.Seconds()));
+    .Configure(Intent.Cancel(ct), Intent.Timeout(5.Seconds()));
 ```
 
 **Поведение.** Создаёт linked CTS из входящего token pipeline и вашего `ct`. Самый внешний слой — отмена видна Timeout, Retry, Bulkhead, Atomic и body.
@@ -65,7 +65,7 @@ await Intent.Run(async ct => await client.GetAsync(url, ct))
 **Зачем.** Дать операции человекочитаемое имя для Trace / Activity / Metrics.
 
 ```csharp
-await work.Useful(Intent.Named("Checkout"), Intent.Metrics, Intent.Activity);
+await work.Configure(Intent.Named("Checkout"), Intent.Metrics, Intent.Activity);
 ```
 
 **Поведение.** Кладёт имя в `IntentAmbient` на время выполнения вложенного pipeline, затем восстанавливает предыдущее.
@@ -79,7 +79,7 @@ await work.Useful(Intent.Named("Checkout"), Intent.Metrics, Intent.Activity);
 **Зачем.** Прокинуть baggage (userId, orderId, …) в Activity / Trace / Metrics на время операции.
 
 ```csharp
-await work.Useful(
+await work.Configure(
     Intent.Named("Checkout"),
     Intent.Tag("userId", userId),
     Intent.Tags(("orderId", orderId), ("region", "eu")),
@@ -100,7 +100,7 @@ await work.Useful(
 ```csharp
 IntentDiagnostics.Traced += e => Console.WriteLine($"{e.Phase} {e.Name} {e.Duration}");
 
-await work.Useful(Intent.Named("Sync"), Intent.Trace);
+await work.Configure(Intent.Named("Sync"), Intent.Trace);
 ```
 
 **События** (`IntentTraceEvent`):
@@ -119,7 +119,7 @@ await work.Useful(Intent.Named("Sync"), Intent.Trace);
 **Зачем.** OpenTelemetry-совместимый span через `ActivitySource("Intents.Intent")`.
 
 ```csharp
-await work.Useful(Intent.Named("Pay"), Intent.Activity);
+await work.Configure(Intent.Named("Pay"), Intent.Activity);
 ```
 
 **Поведение.**
@@ -136,7 +136,7 @@ await work.Useful(Intent.Named("Pay"), Intent.Activity);
 **Зачем.** Агрегированные счётчики process-local.
 
 ```csharp
-await work.Useful(Intent.Named("Pay"), Intent.Metrics);
+await work.Configure(Intent.Named("Pay"), Intent.Metrics);
 
 IntentMetrics.GetCount("Pay");
 IntentMetrics.GetSuccesses("Pay");
@@ -158,10 +158,10 @@ IntentMetrics.GetAverageMilliseconds("Pay");
 
 ```csharp
 await Intent.Run(() => Charge(cmd))
-    .Useful(Intent.Idempotent($"pay:{cmd.IdempotencyKey}", TimeSpan.FromHours(24)));
+    .Configure(Intent.Idempotent($"pay:{cmd.IdempotencyKey}", TimeSpan.FromHours(24)));
 
 var status = await Intent.Run(() => CreateOrder(cmd))
-    .Useful(Intent.Idempotent($"order:{cmd.Key}"));
+    .Configure(Intent.Idempotent($"order:{cmd.Key}"));
 ```
 
 **Поведение.**
@@ -181,7 +181,7 @@ Default TTL = 1 час. Process-local store (`IntentIdempotencyStore.Clear()` в
 
 ```csharp
 var profile = await Intent.Run(() => Load(userId))
-    .Useful(Intent.Cache($"user:{userId}", 30.Seconds()));
+    .Configure(Intent.Cache($"user:{userId}", 30.Seconds()));
 ```
 
 **Поведение.**
@@ -203,7 +203,7 @@ var profile = await Intent.Run(() => Load(userId))
 
 ```csharp
 await Intent.Run(CallPayments)
-    .Useful(Intent.CircuitBreaker("payments", failureThreshold: 5, breakDuration: 30.Seconds()));
+    .Configure(Intent.CircuitBreaker("payments", failureThreshold: 5, breakDuration: 30.Seconds()));
 ```
 
 **Состояния.**
@@ -226,7 +226,7 @@ await Intent.Run(CallPayments)
 **Зачем.** Общий wall-time бюджет на весь внутренний pipeline (включая Retry).
 
 ```csharp
-await work.Useful(Intent.Timeout(10.Seconds()), Intent.Retry(5));
+await work.Configure(Intent.Timeout(10.Seconds()), Intent.Retry(5));
 ```
 
 **Поведение.** `next.WaitAsync(timeout, ct)`. При превышении — `TimeoutException`.
@@ -243,7 +243,7 @@ await work.Useful(Intent.Timeout(10.Seconds()), Intent.Retry(5));
 **Зачем.** Повторить тело при временных сбоях.
 
 ```csharp
-await work.Useful(Intent.Retry(
+await work.Configure(Intent.Retry(
     attempts: 5,
     backoff: IntentBackoff.Exponential(100.Milliseconds()),
     shouldRetry: ex => ex is HttpRequestException or TimeoutException,
@@ -272,7 +272,7 @@ await work.Useful(Intent.Retry(
 
 ```csharp
 await Intent.Run(CallHttp)
-    .Useful(Intent.Bulkhead("http", maxParallelism: 32));
+    .Configure(Intent.Bulkhead("http", maxParallelism: 32));
 ```
 
 **Поведение.** Именной `SemaphoreSlim(max, max)`. Слот занимается на время `next`, затем отпускается.
@@ -292,8 +292,8 @@ await Intent.Run(CallHttp)
 **Зачем.** Критическая секция in-process.
 
 ```csharp
-await work.Useful(Intent.Atomic);           // один глобальный лок
-await work.Useful(Intent.AtomicOn("order:1"));
+await work.Configure(Intent.Atomic);           // один глобальный лок
+await work.Configure(Intent.AtomicOn("order:1"));
 
 await Intent.Atomically(() => { /* ... */ });
 await Intent.Atomically("wallet:9", () => Debit(9));
@@ -313,9 +313,9 @@ await Intent.Atomically("wallet:9", () => Debit(9));
 | `Intent.Sequence` | Последовательный запуск |
 | `Background()` | Schedule без await; faults → `IntentDiagnostics` |
 | `Then` / `Select` | Цепочка по результату `Intent<T>` |
-| `IntentProfile.Http` / `DbWrite` | Готовые packs для `Useful(...)` |
+| `IntentProfile.Http` / `DbWrite` | Готовые packs для `Configure(...)` |
 
-Политики на композите оборачивают **весь** агрегат, не каждого ребёнка. Ретрай/timeout на каждый child — вешайте `Useful` на сами `a`, `b`.
+Политики на композите оборачивают **весь** агрегат, не каждого ребёнка. Ретрай/timeout на каждый child — вешайте `Configure` на сами `a`, `b`.
 
 ---
 
@@ -335,10 +335,10 @@ Side effect + Retry?          → Idempotent(key)
 Типичный I/O-профиль:
 
 ```csharp
-.Useful(IntentProfile.Http("Fetch"), Intent.Cancel(ct))
+.Configure(IntentProfile.Http("Fetch"), Intent.Cancel(ct))
 
 // или вручную:
-.Useful(
+.Configure(
     Intent.Named("Fetch"),
     Intent.Activity,
     Intent.Metrics,

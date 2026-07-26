@@ -162,15 +162,15 @@ public class Intent
 
     /// <summary>
     /// Runs <paramref name="action"/> under <see cref="Atomic"/>.
-    /// Named <c>Atomically</c> because <see cref="Atomic"/> is the policy used with <c>Useful</c>.
+    /// Named <c>Atomically</c> because <see cref="Atomic"/> is the policy used with <c>Configure</c>.
     /// </summary>
-    public static Intent Atomically(Action action) => Run(action).Useful(Atomic);
+    public static Intent Atomically(Action action) => Run(action).Configure(Atomic);
 
-    public static Intent Atomically(Func<Task> action) => Run(action).Useful(Atomic);
+    public static Intent Atomically(Func<Task> action) => Run(action).Configure(Atomic);
 
-    public static Intent Atomically(string key, Action action) => Run(action).Useful(AtomicOn(key));
+    public static Intent Atomically(string key, Action action) => Run(action).Configure(AtomicOn(key));
 
-    public static Intent Atomically(string key, Func<Task> action) => Run(action).Useful(AtomicOn(key));
+    public static Intent Atomically(string key, Func<Task> action) => Run(action).Configure(AtomicOn(key));
 
     /// <summary>
     /// Runs all intents concurrently (each is scheduled on await of the composite).
@@ -285,7 +285,7 @@ public class Intent
         _tcs.TrySetException(exception);
     }
 
-    public Intent Useful(params IntentPolicy[] policies)
+    public Intent Configure(params IntentPolicy[] policies)
     {
         ArgumentNullException.ThrowIfNull(policies);
         if (_lifecycle is IntentLifecycle.Scheduled or IntentLifecycle.Running or IntentLifecycle.Completed)
