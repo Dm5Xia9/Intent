@@ -103,7 +103,7 @@ public class Intent<T>
     {
         ArgumentNullException.ThrowIfNull(next);
         var source = this;
-        return Intent.Run(async () =>
+        return Intent.From(async () =>
         {
             var value = await source;
             return await next(value);
@@ -114,7 +114,7 @@ public class Intent<T>
     {
         ArgumentNullException.ThrowIfNull(next);
         var source = this;
-        return Intent.Run(async ct =>
+        return Intent.From(async ct =>
         {
             var value = await source;
             return await next(value, ct).ConfigureAwait(false);
@@ -125,7 +125,7 @@ public class Intent<T>
     {
         ArgumentNullException.ThrowIfNull(map);
         var source = this;
-        return Intent.Run(async () =>
+        return Intent.From(async () =>
         {
             var value = await source;
             return map(value);

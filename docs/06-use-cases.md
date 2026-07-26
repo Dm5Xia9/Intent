@@ -12,14 +12,12 @@ await Checkout(cart);
 
 // Worker: терпеливо + наблюдаемость
 await Checkout(cart)
-    .Configure(
-        Intent.Named("Checkout"),
-        Intent.Activity,
-        Intent.Metrics,
-        Intent.Retry(5, IntentBackoff.Exponential(200.Milliseconds()), attemptTimeout: 3.Seconds()),
-        Intent.Timeout(30.Seconds()),
-        Intent.Cancel(ct)
-    );
+    .WithNamed("Checkout")
+    .WithActivity()
+    .WithMetrics()
+    .WithRetry(5, IntentBackoff.Exponential(200.Milliseconds()), attemptTimeout: 3.Seconds())
+    .WithTimeout(30.Seconds())
+    .WithCancel(ct);
 ```
 
 Один метод — несколько профилей исполнения. Для типового HTTP: `IntentProfile.Http("Checkout")`.
@@ -27,11 +25,11 @@ await Checkout(cart)
 ### 1b. Идемпотентный side effect
 
 ```csharp
-await Intent.Run(() => Charge(cmd))
+await Intent.From(() => Charge(cmd))
     .Configure(
-        Intent.Idempotent($"pay:{cmd.IdempotencyKey}"),
-        Intent.Retry(3),
-        Intent.Timeout(10.Seconds()));
+        IntentPolicies.Idempotent($"pay:{cmd.IdempotencyKey}"),
+        IntentPolicies.Retry(3),
+        IntentPolicies.Timeout(10.Seconds()));
 ```
 
 Повтор с тем же ключом не спишет дважды; параллельные запросы делят один run.
@@ -47,7 +45,7 @@ await Intent.Atomically(() =>
 
 // Разные ресурсы — разные ключи
 await Intent.Atomically("wallet:42", () => Debit(42));
-await Transfer().Configure(Intent.AtomicOn("account:7"));
+await Transfer().Configure(IntentPolicies.AtomicOn("account:7"));
 ```
 
 Структуры остаются простыми; синхронизация — политика.
@@ -57,11 +55,11 @@ await Transfer().Configure(Intent.AtomicOn("account:7"));
 ```csharp
 await LoadProfile(userId)
     .Configure(
-        Intent.Named("LoadProfile"),
-        Intent.Trace,
-        Intent.Activity,
-        Intent.Metrics,
-        Intent.Cache($"profile:{userId}", 30.Seconds())
+        IntentPolicies.Named("LoadProfile"),
+        IntentPolicies.Trace,
+        IntentPolicies.Activity,
+        IntentPolicies.Metrics,
+        IntentPolicies.Cache($"profile:{userId}", 30.Seconds())
     );
 ```
 
@@ -70,14 +68,14 @@ await LoadProfile(userId)
 ### 4. Защита внешнего I/O
 
 ```csharp
-await Intent.Run(async ct => await http.GetAsync(url, ct))
+await Intent.From(async ct => await http.GetAsync(url, ct))
     .Configure(
-        Intent.Named("HttpGet"),
-        Intent.CircuitBreaker("payments-api"),
-        Intent.Bulkhead("http", maxParallelism: 32),
-        Intent.Retry(3, attemptTimeout: 1.Seconds()),
-        Intent.Timeout(5.Seconds()),
-        Intent.Cancel(ct)
+        IntentPolicies.Named("HttpGet"),
+        IntentPolicies.CircuitBreaker("payments-api"),
+        IntentPolicies.Bulkhead("http", maxParallelism: 32),
+        IntentPolicies.Retry(3, attemptTimeout: 1.Seconds()),
+        IntentPolicies.Timeout(5.Seconds()),
+        IntentPolicies.Cancel(ct)
     );
 ```
 
@@ -92,7 +90,7 @@ var batch = orders.Select(o => Process(o)).ToList();
 if (dryRun) return;
 
 await Intent.WhenAll(batch.ToArray())
-    .Configure(Intent.Bulkhead("orders", 8), Intent.Retry(2));
+    .Configure(IntentPolicies.Bulkhead("orders", 8), IntentPolicies.Retry(2));
 ```
 
 С `Task` к моменту `Select` работа уже могла стартовать.
@@ -105,16 +103,16 @@ await Intent.Sequence(Validate(), Save(), Notify());
 await Intent.WhenAll(WarmCacheA(), WarmCacheB());
 
 // Явный background с отчётом об ошибке в IntentDiagnostics
-RefreshAsync().Configure(Intent.Retry(2)).Background();
+RefreshAsync().Configure(IntentPolicies.Retry(2)).Background();
 ```
 
 ### 7. Тесты политик отдельно от домена
 
-Доменный метод пишет «что». Политики проверяются на `Intent.Run` без подъёма всего сценария:
+Доменный метод пишет «что». Политики проверяются на `Intent.From` без подъёма всего сценария:
 
 ```csharp
-await Intent.Run(Flaky)
-    .Configure(Intent.Retry(3, shouldRetry: ex => ex is HttpRequestException));
+await Intent.From(Flaky)
+    .Configure(IntentPolicies.Retry(3, shouldRetry: ex => ex is HttpRequestException));
 ```
 
 ## Где Intent не нужен
@@ -131,7 +129,7 @@ await Intent.Run(Flaky)
 ```csharp
 var i = Work();
 await i;
-i.Configure(Intent.Retry(3)); // бросит
+i.Configure(IntentPolicies.Retry(3)); // бросит
 ```
 
 ### Думать, что Atomic / AtomicOn / Bulkhead / Circuit / Cache — распределённые
@@ -140,7 +138,7 @@ i.Configure(Intent.Retry(3)); // бросит
 
 ### Думать, что Timeout убивает поток
 
-Timeout (и `attemptTimeout`) ограничивают **ожидание**. Код без cooperative cancel / без `CancellationToken` может доработать в фоне. Для отмены тела используйте `Intent.Run(async ct => ...)` + `Cancel`/`Timeout`.
+Timeout (и `attemptTimeout`) ограничивают **ожидание**. Код без cooperative cancel / без `CancellationToken` может доработать в фоне. Для отмены тела используйте `Intent.From(async ct => ...)` + `Cancel`/`Timeout`.
 
 ### Забытый Intent без Background
 
@@ -152,7 +150,7 @@ ProcessOrder().Background(); // так: schedule + ошибки в diagnostics
 ### Политики на WhenAll ≠ политики на детях
 
 ```csharp
-await Intent.WhenAll(a, b).Configure(Intent.Retry(3));
+await Intent.WhenAll(a, b).Configure(IntentPolicies.Retry(3));
 // Retry оборачивает весь WhenAll, а не каждый из a/b отдельно
 ```
 

@@ -13,10 +13,15 @@ public interface IntentPolicy
 Навешивание:
 
 ```csharp
-await work.Configure(Intent.Retry(3), Intent.Timeout(5.Seconds()));
+await work
+    .WithRetry(3)
+    .WithTimeout(5.Seconds());
+
+// или фабрики:
+await work.Configure(IntentPolicies.Retry(3), IntentPolicies.Timeout(5.Seconds()));
 ```
 
-Порядок в `Configure` **не важен** — pipeline сортирует по `Order`. Общая схема: [03-pipeline.md](03-pipeline.md).
+Порядок в `With*` / `Configure` **не важен** — pipeline сортирует по `Order`. Общая схема: [03-pipeline.md](03-pipeline.md).
 
 Ниже — каждая встроенная политика: зачем, API, поведение, ограничения.
 
@@ -26,19 +31,21 @@ await work.Configure(Intent.Retry(3), Intent.Timeout(5.Seconds()));
 
 | Политика | Order | API |
 |----------|-------|-----|
-| Cancel | -20 | `Intent.Cancel(ct)` |
-| Named | -15 | `Intent.Named(name)` |
-| Tag | -14 | `Intent.Tag(key, value)` / `Tags(...)` |
-| Trace | -10 | `Intent.Trace` |
-| Activity | -8 | `Intent.Activity` |
-| Metrics | -5 | `Intent.Metrics` |
-| Idempotent | -4 | `Intent.Idempotent(key, ttl?)` |
-| Cache | -3 | `Intent.Cache(key, ttl)` |
-| CircuitBreaker | -2 | `Intent.CircuitBreaker(name, …)` |
-| Timeout | 0 | `Intent.Timeout(span)` |
-| Retry | 1 | `Intent.Retry(n, …)` |
-| Bulkhead | 2 | `Intent.Bulkhead(name, max)` |
-| Atomic | 3 | `Intent.Atomic` / `AtomicOn(key)` |
+| Cancel | -20 | `IntentPolicies.Cancel` / `WithCancel` |
+| Named | -15 | `IntentPolicies.Named` / `WithNamed` |
+| Tag | -14 | `IntentPolicies.Tag` / `WithTag` / `WithTags` |
+| Trace | -10 | `IntentPolicies.Trace` / `WithTrace` |
+| Activity | -8 | `IntentPolicies.Activity` / `WithActivity` |
+| Metrics | -5 | `IntentPolicies.Metrics` / `WithMetrics` |
+| Idempotent | -4 | `IntentPolicies.Idempotent` / `WithIdempotent` |
+| Cache | -3 | `IntentPolicies.Cache` / `WithCache` |
+| CircuitBreaker | -2 | `IntentPolicies.CircuitBreaker` / `WithCircuitBreaker` |
+| Timeout | 0 | `IntentPolicies.Timeout` / `WithTimeout` |
+| Retry | 1 | `IntentPolicies.Retry` / `WithRetry` |
+| Bulkhead | 2 | `IntentPolicies.Bulkhead` / `WithBulkhead` |
+| Atomic | 3 | `IntentPolicies.Atomic` / `WithAtomic` / `WithAtomicOn` |
+| Before | 4 | `IntentPolicies.Before` / `WithBefore` |
+| After | 5 | `IntentPolicies.After` / `WithAfter` |
 
 ---
 
@@ -47,15 +54,15 @@ await work.Configure(Intent.Retry(3), Intent.Timeout(5.Seconds()));
 **Зачем.** Пробросить внешний `CancellationToken` в весь pipeline (и в тело, если оно его принимает).
 
 ```csharp
-await Intent.Run(async ct => await client.GetAsync(url, ct))
-    .Configure(Intent.Cancel(ct), Intent.Timeout(5.Seconds()));
+await Intent.From(async ct => await client.GetAsync(url, ct))
+    .Configure(IntentPolicies.Cancel(ct), IntentPolicies.Timeout(5.Seconds()));
 ```
 
 **Поведение.** Создаёт linked CTS из входящего token pipeline и вашего `ct`. Самый внешний слой — отмена видна Timeout, Retry, Bulkhead, Atomic и body.
 
 **Важно.**
-- `Intent.Run(Action)` / `Run(Func<Task>)` token почти не используют (только проверка в sync `Run(Action)`).
-- Для реальной отмены I/O пишите `Run(async ct => …)` или `async Intent` с `await Something(ct)`.
+- `Intent.From(Action)` / `From(Func<Task>)` token почти не используют (только проверка в sync `From(Action)`).
+- Для реальной отмены I/O пишите `From(async ct => …)` или `async Intent` с `await Something(ct)`.
 - Отмена обычно даёт `OperationCanceledException`; Retry по умолчанию её **не** повторяет.
 
 ---
@@ -65,7 +72,7 @@ await Intent.Run(async ct => await client.GetAsync(url, ct))
 **Зачем.** Дать операции человекочитаемое имя для Trace / Activity / Metrics.
 
 ```csharp
-await work.Configure(Intent.Named("Checkout"), Intent.Metrics, Intent.Activity);
+await work.Configure(IntentPolicies.Named("Checkout"), IntentPolicies.Metrics, IntentPolicies.Activity);
 ```
 
 **Поведение.** Кладёт имя в `IntentAmbient` на время выполнения вложенного pipeline, затем восстанавливает предыдущее.
@@ -80,11 +87,11 @@ await work.Configure(Intent.Named("Checkout"), Intent.Metrics, Intent.Activity);
 
 ```csharp
 await work.Configure(
-    Intent.Named("Checkout"),
-    Intent.Tag("userId", userId),
-    Intent.Tags(("orderId", orderId), ("region", "eu")),
-    Intent.Activity,
-    Intent.Trace);
+    IntentPolicies.Named("Checkout"),
+    IntentPolicies.Tag("userId", userId),
+    IntentPolicies.Tags(("orderId", orderId), ("region", "eu")),
+    IntentPolicies.Activity,
+    IntentPolicies.Trace);
 ```
 
 **Поведение.** Мержит теги в ambient-словарь (`IntentAmbient`), восстанавливает предыдущий при выходе. `Activity` получает теги при старте; `IntentTraceEvent` / `IntentMetricEvent` несут снимок в поле `Tags`.
@@ -100,7 +107,7 @@ await work.Configure(
 ```csharp
 IntentDiagnostics.Traced += e => Console.WriteLine($"{e.Phase} {e.Name} {e.Duration}");
 
-await work.Configure(Intent.Named("Sync"), Intent.Trace);
+await work.Configure(IntentPolicies.Named("Sync"), IntentPolicies.Trace);
 ```
 
 **События** (`IntentTraceEvent`):
@@ -119,7 +126,7 @@ await work.Configure(Intent.Named("Sync"), Intent.Trace);
 **Зачем.** OpenTelemetry-совместимый span через `ActivitySource("Intents.Intent")`.
 
 ```csharp
-await work.Configure(Intent.Named("Pay"), Intent.Activity);
+await work.Configure(IntentPolicies.Named("Pay"), IntentPolicies.Activity);
 ```
 
 **Поведение.**
@@ -136,7 +143,7 @@ await work.Configure(Intent.Named("Pay"), Intent.Activity);
 **Зачем.** Агрегированные счётчики process-local.
 
 ```csharp
-await work.Configure(Intent.Named("Pay"), Intent.Metrics);
+await work.Configure(IntentPolicies.Named("Pay"), IntentPolicies.Metrics);
 
 IntentMetrics.GetCount("Pay");
 IntentMetrics.GetSuccesses("Pay");
@@ -157,11 +164,11 @@ IntentMetrics.GetAverageMilliseconds("Pay");
 **Зачем.** Дедуп по ключу: параллельные вызовы делят один run; успешный результат помнится на TTL. Ошибка **не** залипает — следующий вызов может повторить.
 
 ```csharp
-await Intent.Run(() => Charge(cmd))
-    .Configure(Intent.Idempotent($"pay:{cmd.IdempotencyKey}", TimeSpan.FromHours(24)));
+await Intent.From(() => Charge(cmd))
+    .Configure(IntentPolicies.Idempotent($"pay:{cmd.IdempotencyKey}", TimeSpan.FromHours(24)));
 
-var status = await Intent.Run(() => CreateOrder(cmd))
-    .Configure(Intent.Idempotent($"order:{cmd.Key}"));
+var status = await Intent.From(() => CreateOrder(cmd))
+    .Configure(IntentPolicies.Idempotent($"order:{cmd.Key}"));
 ```
 
 **Поведение.**
@@ -180,8 +187,8 @@ Default TTL = 1 час. Process-local store (`IntentIdempotencyStore.Clear()` в
 **Зачем.** In-memory кеш результата для **`Intent<T>`**.
 
 ```csharp
-var profile = await Intent.Run(() => Load(userId))
-    .Configure(Intent.Cache($"user:{userId}", 30.Seconds()));
+var profile = await Intent.From(() => Load(userId))
+    .Configure(IntentPolicies.Cache($"user:{userId}", 30.Seconds()));
 ```
 
 **Поведение.**
@@ -202,8 +209,8 @@ var profile = await Intent.Run(() => Load(userId))
 **Зачем.** Fail-fast, когда зависимость уже «лежит».
 
 ```csharp
-await Intent.Run(CallPayments)
-    .Configure(Intent.CircuitBreaker("payments", failureThreshold: 5, breakDuration: 30.Seconds()));
+await Intent.From(CallPayments)
+    .Configure(IntentPolicies.CircuitBreaker("payments", failureThreshold: 5, breakDuration: 30.Seconds()));
 ```
 
 **Состояния.**
@@ -226,7 +233,7 @@ await Intent.Run(CallPayments)
 **Зачем.** Общий wall-time бюджет на весь внутренний pipeline (включая Retry).
 
 ```csharp
-await work.Configure(Intent.Timeout(10.Seconds()), Intent.Retry(5));
+await work.Configure(IntentPolicies.Timeout(10.Seconds()), IntentPolicies.Retry(5));
 ```
 
 **Поведение.** `next.WaitAsync(timeout, ct)`. При превышении — `TimeoutException`.
@@ -243,7 +250,7 @@ await work.Configure(Intent.Timeout(10.Seconds()), Intent.Retry(5));
 **Зачем.** Повторить тело при временных сбоях.
 
 ```csharp
-await work.Configure(Intent.Retry(
+await work.Configure(IntentPolicies.Retry(
     attempts: 5,
     backoff: IntentBackoff.Exponential(100.Milliseconds()),
     shouldRetry: ex => ex is HttpRequestException or TimeoutException,
@@ -258,7 +265,7 @@ await work.Configure(Intent.Retry(
 | `shouldRetry` | Фильтр исключений. По умолчанию: всё, кроме `OperationCanceledException` |
 | `attemptTimeout` | `WaitAsync` на **каждую** попытку отдельно |
 
-Для `async Intent` каждая попытка — **клон** state machine (шаблон не мутируется). `Defer` для Retry не обязателен.
+Для `async Intent` каждая попытка — **клон** state machine (шаблон не мутируется). `FromFactory` для Retry не обязателен.
 
 **Backoff.**
 - `IntentBackoff.Constant(delay)`
@@ -271,8 +278,8 @@ await work.Configure(Intent.Retry(
 **Зачем.** Ограничить параллелизм для класса операций (не дать одному типу I/O забить процесс).
 
 ```csharp
-await Intent.Run(CallHttp)
-    .Configure(Intent.Bulkhead("http", maxParallelism: 32));
+await Intent.From(CallHttp)
+    .Configure(IntentPolicies.Bulkhead("http", maxParallelism: 32));
 ```
 
 **Поведение.** Именной `SemaphoreSlim(max, max)`. Слот занимается на время `next`, затем отпускается.
@@ -292,16 +299,38 @@ await Intent.Run(CallHttp)
 **Зачем.** Критическая секция in-process.
 
 ```csharp
-await work.Configure(Intent.Atomic);           // один глобальный лок
-await work.Configure(Intent.AtomicOn("order:1"));
+await work.Configure(IntentPolicies.Atomic);           // один глобальный лок
+await work.Configure(IntentPolicies.AtomicOn("order:1"));
 
 await Intent.Atomically(() => { /* ... */ });
 await Intent.Atomically("wallet:9", () => Debit(9));
 ```
 
-**Поведение.** `SemaphoreSlim(1,1)` — глобальный или per-key. Ближе всего к user code: лок не держится на время backoff Retry и ожидания Timeout снаружи.
+**Поведение.** `SemaphoreSlim(1,1)` — глобальный или per-key. Внутри Retry/Bulkhead, снаружи Before/After/body: лок не держится на время backoff Retry и ожидания Timeout снаружи, но охватывает хуки и тело.
 
 **Важно.** Не распределённый лок и не транзакция БД. Разные ключи не блокируют друг друга; один ключ — взаимное исключение.
+
+---
+
+## Before (`Order 4`) / After (`Order 5`)
+
+**Зачем.** Хуки вокруг **каждой попытки** тела Intent (внутри Retry).
+
+```csharp
+await Intent.From(DoWork)
+    .Configure(
+        IntentPolicies.Retry(3),
+        IntentPolicies.Before(async () => await PrepareAttemptAsync()),
+        IntentPolicies.After(async () => await CleanupAttemptAsync()));
+```
+
+**Поведение.**
+- `Before` — перед телом (после Atomic, если есть).
+- `After` — в `finally` после тела: и при успехе, и при ошибке попытки.
+- Оба внутри Retry → на каждую попытку заново.
+- Overload’ы: `Action`, `Func<Task>`, `Func<CancellationToken, Task>`.
+
+**Важно.** Это не замена тела метода и не middleware «один раз на весь pipeline снаружи Retry». Для однократного setup на всю операцию используйте свой `IntentPolicy` с меньшим `Order` (снаружи Retry).
 
 ---
 
@@ -322,12 +351,13 @@ await Intent.Atomically("wallet:9", () => Debit(9));
 ## Как выбрать набор
 
 ```
-Нужна отмена извне?           → Cancel + Run(async ct => …)
+Нужна отмена извне?           → Cancel + From(async ct => …)
 Нужны метрики/трасса?         → Named + Tag + Trace/Activity/Metrics
 Чтение без side effects?      → Cache
 Side effect + Retry?          → Idempotent(key)
 Внешний сервис?               → IntentProfile.Http / CB+Bulkhead+Retry+Timeout
 Критическая секция / DB write?→ IntentProfile.DbWrite / AtomicOn
+Хуки на каждую попытку?       → Before / After
 Общий бюджет времени?         → Timeout
 Лимит на одну попытку?        → Retry(..., attemptTimeout:)
 ```
@@ -335,17 +365,17 @@ Side effect + Retry?          → Idempotent(key)
 Типичный I/O-профиль:
 
 ```csharp
-.Configure(IntentProfile.Http("Fetch"), Intent.Cancel(ct))
+.Configure(IntentProfile.Http("Fetch"), IntentPolicies.Cancel(ct))
 
 // или вручную:
 .Configure(
-    Intent.Named("Fetch"),
-    Intent.Activity,
-    Intent.Metrics,
-    Intent.CircuitBreaker("api"),
-    Intent.Bulkhead("api", 16),
-    Intent.Retry(3, IntentBackoff.Exponential(100.Milliseconds()), attemptTimeout: 1.Seconds()),
-    Intent.Timeout(5.Seconds()),
-    Intent.Cancel(ct)
+    IntentPolicies.Named("Fetch"),
+    IntentPolicies.Activity,
+    IntentPolicies.Metrics,
+    IntentPolicies.CircuitBreaker("api"),
+    IntentPolicies.Bulkhead("api", 16),
+    IntentPolicies.Retry(3, IntentBackoff.Exponential(100.Milliseconds()), attemptTimeout: 1.Seconds()),
+    IntentPolicies.Timeout(5.Seconds()),
+    IntentPolicies.Cancel(ct)
 )
 ```

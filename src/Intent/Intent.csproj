@@ -9,7 +9,7 @@
 
     <IsPackable>true</IsPackable>
     <PackageId>Intent</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Authors>Xia5dm9</Authors>
     <Description>Cold deferred-execution model for .NET: separate what to run from how to run it with a policy pipeline (retry, timeout, idempotency, bulkhead, and more).</Description>
     <PackageTags>async;await;intent;policies;resilience;retry;timeout;pipeline</PackageTags>

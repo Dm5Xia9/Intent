@@ -4,11 +4,11 @@
 
 `Intent` — это **описание намерения выполнить работу**, а не сама работа.
 
-Вызов метода создаёт план. План можно настроить политиками (`Configure`). Реальное выполнение начинается только при `await` (или явном `Schedule`).
+Вызов метода создаёт план. План можно настроить политиками (`With*` / `Configure`). Реальное выполнение начинается только при `await` (или явном `Schedule`).
 
 ```csharp
 var plan = ProcessOrder();              // Created: код ProcessOrder ещё не бежал
-plan = plan.Configure(Intent.Retry(3));    // Configured: политики прикреплены
+plan = plan.WithRetry(3);               // Configured: политики прикреплены
 await plan;                             // Scheduled → Running → Completed
 ```
 

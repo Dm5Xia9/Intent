@@ -24,8 +24,8 @@ public class NextWavePoliciesTests
                 await Task.Delay(200);
         };
 
-        await Intent.Run(body)
-            .Configure(Intent.Retry(3, attemptTimeout: 40.Milliseconds()));
+        await Intent.From(body)
+            .WithRetry(3, attemptTimeout: 40.Milliseconds());
 
         Assert.Equal(2, attempts);
     }
@@ -38,29 +38,29 @@ public class NextWavePoliciesTests
         for (var i = 0; i < 3; i++)
         {
             await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-                await Intent.Run(boom).Configure(Intent.CircuitBreaker("cb1", failureThreshold: 3, breakDuration: 5.Seconds())));
+                await Intent.From(boom).WithCircuitBreaker("cb1", failureThreshold: 3, breakDuration: 5.Seconds()));
         }
 
         await Assert.ThrowsAsync<IntentCircuitOpenException>(async () =>
-            await Intent.Run(boom).Configure(Intent.CircuitBreaker("cb1", failureThreshold: 3, breakDuration: 5.Seconds())));
+            await Intent.From(boom).WithCircuitBreaker("cb1", failureThreshold: 3, breakDuration: 5.Seconds()));
     }
 
     [Fact]
     public async Task CircuitBreaker_half_open_probe_can_close()
     {
         Func<Task> boom = () => throw new InvalidOperationException("x");
-        var policy = Intent.CircuitBreaker("cb2", failureThreshold: 2, breakDuration: 30.Milliseconds());
+        var policy = IntentPolicies.CircuitBreaker("cb2", failureThreshold: 2, breakDuration: 30.Milliseconds());
 
         for (var i = 0; i < 2; i++)
-            await Assert.ThrowsAsync<InvalidOperationException>(async () => await Intent.Run(boom).Configure(policy));
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await Intent.From(boom).Configure(policy));
 
         await Assert.ThrowsAsync<IntentCircuitOpenException>(async () =>
-            await Intent.Run(boom).Configure(policy));
+            await Intent.From(boom).Configure(policy));
 
         await Task.Delay(40);
 
-        await Intent.Run(() => { }).Configure(policy);
-        await Intent.Run(() => { }).Configure(policy);
+        await Intent.From(() => { }).Configure(policy);
+        await Intent.From(() => { }).Configure(policy);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public class NextWavePoliciesTests
         var started = 0;
         var max = 0;
 
-        Intent Make() => Intent.Run(async () =>
+        Intent Make() => Intent.From(async () =>
         {
             var n = Interlocked.Increment(ref started);
             max = Math.Max(max, n);
@@ -86,9 +86,9 @@ public class NextWavePoliciesTests
     {
         var log = new List<int>();
         await Intent.Sequence(
-            Intent.Run(() => log.Add(1)),
-            Intent.Run(() => log.Add(2)),
-            Intent.Run(() => log.Add(3)));
+            Intent.From(() => log.Add(1)),
+            Intent.From(() => log.Add(2)),
+            Intent.From(() => log.Add(3)));
         Assert.Equal(new[] { 1, 2, 3 }, log);
     }
 
@@ -102,7 +102,7 @@ public class NextWavePoliciesTests
                 faulted.TrySetResult();
         };
 
-        Intent.Run(() => throw new InvalidOperationException("bg"))
+        Intent.From(() => throw new InvalidOperationException("bg"))
             .Background();
 
         await faulted.Task.WaitAsync(2.Seconds());
@@ -120,8 +120,8 @@ public class NextWavePoliciesTests
         };
         ActivitySource.AddActivityListener(listener);
 
-        await Intent.Run(() => { })
-            .Configure(Intent.Named("ActDemo"), Intent.Activity);
+        await Intent.From(() => { })
+            .Configure(IntentPolicies.Named("ActDemo"), IntentPolicies.Activity);
 
         Assert.NotNull(seen);
         Assert.Equal("ActDemo", seen!.DisplayName);
@@ -142,7 +142,7 @@ public class NextWavePoliciesTests
                 await Task.Delay(40);
                 Interlocked.Decrement(ref inFlight);
             };
-            await Intent.Run(body).Configure(Intent.Bulkhead("bh", maxParallelism: 2));
+            await Intent.From(body).WithBulkhead("bh", maxParallelism: 2);
         }
 
         await Task.WhenAll(Work(), Work(), Work(), Work());

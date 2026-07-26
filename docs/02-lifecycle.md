@@ -11,7 +11,7 @@ Created → Configured → Scheduled → Running → Completed
 Появляется при:
 
 - вызове `async Intent Foo()` — builder создаёт экземпляр и **биндит** state machine, но **не** вызывает `MoveNext`;
-- `Intent.Run(...)` / `Defer(...)` — создаётся экземпляр с телом-делегатом.
+- `Intent.From(...)` / `FromFactory(...)` — создаётся экземпляр с телом-делегатом.
 
 На этой стадии:
 
@@ -24,7 +24,7 @@ Created → Configured → Scheduled → Running → Completed
 После первого `Configure(...)`:
 
 ```csharp
-intent.Configure(Intent.Retry(3), Intent.Timeout(5.Seconds()));
+intent.Configure(IntentPolicies.Retry(3), IntentPolicies.Timeout(5.Seconds()));
 ```
 
 Политики накапливаются в списке. Повторный `Configure` до старта — дополняет список.  

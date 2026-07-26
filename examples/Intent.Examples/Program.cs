@@ -1,4 +1,5 @@
 using Intents;
+using Intents.Examples;
 
 Console.WriteLine("=== Intent examples ===\n");
 
@@ -9,6 +10,7 @@ await CombinedPolicies();
 await CacheAndDiagnostics();
 await CompositionDemo();
 await IdempotentAndThenDemo();
+await CustomPolicyAndProfileDemo();
 
 Console.WriteLine("\nDone.");
 
@@ -44,11 +46,9 @@ static async Task RetryAndTimeout()
             throw new InvalidOperationException("transient");
     };
 
-    await Intent.Run(request)
-        .Configure(
-            Intent.Retry(3, IntentBackoff.Constant(20.Milliseconds())),
-            Intent.Timeout(5.Seconds())
-        );
+    await Intent.From(request)
+        .WithRetry(3, IntentBackoff.Constant(20.Milliseconds()))
+        .WithTimeout(5.Seconds());
 
     Console.WriteLine();
 }
@@ -77,14 +77,12 @@ static async Task CombinedPolicies()
 {
     Console.WriteLine("-- Combined policies --");
 
-    await Intent.Run(() => Console.WriteLine("  Named + Metrics + Retry + Atomic"))
-        .Configure(
-            Intent.Named("CombinedDemo"),
-            Intent.Metrics,
-            Intent.AtomicOn("combined"),
-            Intent.Retry(3),
-            Intent.Timeout(10.Seconds())
-        );
+    await Intent.From(() => Console.WriteLine("  Named + Metrics + Retry + Atomic"))
+        .WithNamed("CombinedDemo")
+        .WithMetrics()
+        .WithAtomicOn("combined")
+        .WithRetry(3)
+        .WithTimeout(10.Seconds());
 
     Console.WriteLine($"  metrics count={IntentMetrics.GetCount("CombinedDemo")}");
     Console.WriteLine();
@@ -102,8 +100,8 @@ static async Task CacheAndDiagnostics()
         return 42;
     };
 
-    AssertEqual(42, await Intent.Run(load).Configure(Intent.Cache("answer", 5.Seconds())));
-    AssertEqual(42, await Intent.Run(load).Configure(Intent.Cache("answer", 5.Seconds())));
+    AssertEqual(42, await Intent.From(load).WithCache("answer", 5.Seconds()));
+    AssertEqual(42, await Intent.From(load).WithCache("answer", 5.Seconds()));
     Console.WriteLine($"  body ran {calls} time(s)");
     Console.WriteLine();
 }
@@ -113,15 +111,17 @@ static async Task CompositionDemo()
     Console.WriteLine("-- WhenAll / Sequence / Bulkhead --");
 
     await Intent.WhenAll(
-        Intent.Run(() => Console.WriteLine("  WhenAll A")),
-        Intent.Run(() => Console.WriteLine("  WhenAll B")));
+        Intent.From(() => Console.WriteLine("  WhenAll A")),
+        Intent.From(() => Console.WriteLine("  WhenAll B")));
 
     await Intent.Sequence(
-        Intent.Run(() => Console.WriteLine("  Sequence 1")),
-        Intent.Run(() => Console.WriteLine("  Sequence 2")));
+        Intent.From(() => Console.WriteLine("  Sequence 1")),
+        Intent.From(() => Console.WriteLine("  Sequence 2")));
 
-    await Intent.Run(() => Console.WriteLine("  Bulkhead slot"))
-        .Configure(Intent.Bulkhead("demo", 4), Intent.Named("BulkDemo"), Intent.Activity);
+    await Intent.From(() => Console.WriteLine("  Bulkhead slot"))
+        .WithBulkhead("demo", 4)
+        .WithNamed("BulkDemo")
+        .WithActivity();
 
     Console.WriteLine();
 }
@@ -131,17 +131,39 @@ static async Task IdempotentAndThenDemo()
     Console.WriteLine("-- Idempotent / Profile / Then --");
 
     var calls = 0;
-    var policy = Intent.Idempotent("ex-once", 5.Seconds());
-    await Intent.Run(() => { calls++; Console.WriteLine($"  idempotent body #{calls}"); }).Configure(policy);
-    await Intent.Run(() => { calls++; Console.WriteLine($"  idempotent body #{calls}"); }).Configure(policy);
+    await Intent.From(() => { calls++; Console.WriteLine($"  idempotent body #{calls}"); })
+        .WithIdempotent("ex-once", 5.Seconds());
+    await Intent.From(() => { calls++; Console.WriteLine($"  idempotent body #{calls}"); })
+        .WithIdempotent("ex-once", 5.Seconds());
 
-    await Intent.Run(() => Console.WriteLine("  IntentProfile.Http"))
-        .Configure(IntentProfile.Http("ex-http"));
+    await Intent.From(() => Console.WriteLine("  IntentProfile.Http"))
+        .WithPolicies(IntentProfile.Http("ex-http"));
 
-    var n = await Intent.Run(() => 21)
-        .Then(x => Intent.Run(() => x * 2))
+    var n = await Intent.From(() => 21)
+        .Then(x => Intent.From(() => x * 2))
         .Select(x => x);
     Console.WriteLine($"  Then/Select => {n}");
+    Console.WriteLine();
+}
+
+static async Task CustomPolicyAndProfileDemo()
+{
+    Console.WriteLine("-- Custom policy + custom profile --");
+
+    await Intent.From(() => Console.WriteLine("  body with ConsoleLogPolicy"))
+        .WithNamed("CustomPolicyDemo")
+        .WithPolicies(new ConsoleLogPolicy());
+
+    var attempts = 0;
+    await Intent.From(() =>
+        {
+            attempts++;
+            Console.WriteLine($"  worker attempt #{attempts}");
+            if (attempts < 2)
+                throw new InvalidOperationException("transient");
+        })
+        .WithPolicies(AppProfiles.Worker("ex-worker"));
+
     Console.WriteLine();
 }
 

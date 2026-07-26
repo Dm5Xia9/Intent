@@ -7,7 +7,7 @@ public class DeferredExecutionTests
     public async Task Run_does_not_execute_until_awaited()
     {
         var ran = false;
-        var intent = Intent.Run(() => ran = true);
+        var intent = Intent.From(() => ran = true);
 
         Assert.False(ran);
         Assert.Equal(IntentLifecycle.Created, intent.Lifecycle);
@@ -40,7 +40,7 @@ public class DeferredExecutionTests
     public async Task Await_runs_body_only_once()
     {
         var count = 0;
-        var intent = Intent.Run(() => count++);
+        var intent = Intent.From(() => count++);
 
         await intent;
         await intent;

@@ -43,7 +43,7 @@ await t;
 
 ```csharp
 var intent = LoadAsIntent(); // сеть ещё не тронута
-intent = intent.Configure(Intent.Timeout(2.Seconds()));
+intent = intent.Configure(IntentPolicies.Timeout(2.Seconds()));
 await intent; // только здесь MoveNext → реальная работа
 ```
 
@@ -78,7 +78,7 @@ Intent:  call ──► plan ──► configure ──► await ──► runni
 
 - единообразного навешивания политик **до** старта;
 - отсутствия гонок «уже побежало, а timeout ещё не повесили»;
-- композиции (`Defer`, списки намерений, условный запуск).
+- композиции (`FromFactory`, списки намерений, условный запуск).
 
 ## Повторы
 
@@ -86,10 +86,10 @@ Intent:  call ──► plan ──► configure ──► await ──► runni
 `Intent` с `Retry` повторно вызывает body: для делегатов — тот же `Func`, для `async Intent` — **клон** ещё не запущенной state machine (шаблон сохраняется при создании плана).
 
 ```csharp
-await Flaky().Configure(Intent.Retry(3));
+await Flaky().Configure(IntentPolicies.Retry(3));
 ```
 
-`Defer` нужен только если фабрика сама должна выполняться заново (побочные эффекты вне тела Intent), а не для обычного Retry.
+`FromFactory` нужен только если фабрика сама должна выполняться заново (побочные эффекты вне тела Intent), а не для обычного Retry.
 
 ## Когда оставить Task
 

@@ -14,13 +14,13 @@ public class CoverageGapTests
             return 7;
         };
 
-        Assert.Equal(7, await Intent.Run(work));
+        Assert.Equal(7, await Intent.From(work));
     }
 
     [Fact]
     public async Task Run_sync_result_returns_value()
     {
-        Assert.Equal(42, await Intent.Run(() => 42));
+        Assert.Equal(42, await Intent.From(() => 42));
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public class CoverageGapTests
             return 9;
         }
 
-        Assert.Equal(9, await Intent.Defer(() => Flaky()).Configure(Intent.Retry(3)));
+        Assert.Equal(9, await Intent.FromFactory(() => Flaky()).WithRetry(3));
         Assert.Equal(3, attempts);
     }
 
@@ -49,7 +49,7 @@ public class CoverageGapTests
             await Task.Yield();
         }
 
-        await Intent.Defer(() => Inner());
+        await Intent.FromFactory(() => Inner());
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public class CoverageGapTests
                 throw new InvalidOperationException("fail");
         }
 
-        await Flaky().Configure(Intent.Retry(3));
+        await Flaky().WithRetry(3);
         Assert.Equal(3, attempts);
     }
 
@@ -97,22 +97,22 @@ public class CoverageGapTests
             return 42;
         }
 
-        Assert.Equal(42, await Flaky().Configure(Intent.Retry(3)));
+        Assert.Equal(42, await Flaky().WithRetry(3));
         Assert.Equal(3, attempts);
     }
 
     [Fact]
     public async Task Intent_T_Configure_after_schedule_throws()
     {
-        var intent = Intent.Run(() => 1);
+        var intent = Intent.From(() => 1);
         await intent;
-        Assert.Throws<InvalidOperationException>(() => intent.Configure(Intent.Retry(1)));
+        Assert.Throws<InvalidOperationException>(() => intent.WithRetry(1));
     }
 
     [Fact]
     public async Task Intent_T_Configure_configures_before_run()
     {
-        var intent = Intent.Run(() => 1).Configure(Intent.Retry(1));
+        var intent = Intent.From(() => 1).WithRetry(1);
         Assert.Equal(IntentLifecycle.Configured, intent.Lifecycle);
         Assert.Equal(1, await intent);
     }
@@ -123,7 +123,7 @@ public class CoverageGapTests
         Action boom = () => throw new InvalidOperationException("nope");
         // Force Func<int> path via explicit typed factory that throws before returning
         Func<int> work = () => throw new InvalidOperationException("nope");
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await Intent.Run(work));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await Intent.From(work));
     }
 
     [Fact]
@@ -172,7 +172,7 @@ public class CoverageGapTests
     [Fact]
     public async Task Schedule_second_call_is_noop()
     {
-        var intent = Intent.Run(() => { });
+        var intent = Intent.From(() => { });
         intent.Schedule();
         intent.Schedule();
         await intent;
@@ -181,7 +181,7 @@ public class CoverageGapTests
     [Fact]
     public async Task Intent_T_Schedule_second_call_is_noop()
     {
-        var intent = Intent.Run(() => 1);
+        var intent = Intent.From(() => 1);
         intent.Schedule();
         intent.Schedule();
         Assert.Equal(1, await intent);
@@ -190,29 +190,29 @@ public class CoverageGapTests
     [Fact]
     public void Retry_rejects_non_positive_attempts()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => Intent.Retry(0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => IntentPolicies.Retry(0));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RetryPolicy(-1));
     }
 
     [Fact]
     public void Timeout_rejects_non_positive_duration()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => Intent.Timeout(TimeSpan.Zero));
-        Assert.Throws<ArgumentOutOfRangeException>(() => Intent.Timeout((-1).Seconds()));
+        Assert.Throws<ArgumentOutOfRangeException>(() => IntentPolicies.Timeout(TimeSpan.Zero));
+        Assert.Throws<ArgumentOutOfRangeException>(() => IntentPolicies.Timeout((-1).Seconds()));
         Assert.Throws<ArgumentOutOfRangeException>(() => new TimeoutPolicy(TimeSpan.FromMilliseconds(-5)));
     }
 
     [Fact]
     public void Null_arguments_throw()
     {
-        Assert.Throws<ArgumentNullException>(() => Intent.Run((Action)null!));
-        Assert.Throws<ArgumentNullException>(() => Intent.Run((Func<Task>)null!));
-        Assert.Throws<ArgumentNullException>(() => Intent.Defer(null!));
-        Assert.Throws<ArgumentNullException>(() => Intent.Run((Func<int>)null!));
-        Assert.Throws<ArgumentNullException>(() => Intent.Run((Func<Task<int>>)null!));
-        Assert.Throws<ArgumentNullException>(() => Intent.Defer((Func<Intent<int>>)null!));
-        Assert.Throws<ArgumentNullException>(() => Intent.Run(() => { }).Configure(null!));
-        Assert.Throws<ArgumentNullException>(() => Intent.Run(() => 1).Configure(null!));
+        Assert.Throws<ArgumentNullException>(() => Intent.From((Action)null!));
+        Assert.Throws<ArgumentNullException>(() => Intent.From((Func<Task>)null!));
+        Assert.Throws<ArgumentNullException>(() => Intent.FromFactory(null!));
+        Assert.Throws<ArgumentNullException>(() => Intent.From((Func<int>)null!));
+        Assert.Throws<ArgumentNullException>(() => Intent.From((Func<Task<int>>)null!));
+        Assert.Throws<ArgumentNullException>(() => Intent.FromFactory((Func<Intent<int>>)null!));
+        Assert.Throws<ArgumentNullException>(() => Intent.From(() => { }).Configure(null!));
+        Assert.Throws<ArgumentNullException>(() => Intent.From(() => 1).Configure(null!));
     }
 
     [Fact]
@@ -348,7 +348,7 @@ public class CoverageGapTests
             await tcs.Task;
         };
 
-        var intent = Intent.Run(body);
+        var intent = Intent.From(body);
         var awaiter = intent.GetAwaiter();
         Assert.False(awaiter.IsCompleted);
 
@@ -370,7 +370,7 @@ public class CoverageGapTests
             return 11;
         };
 
-        var intent = Intent.Run(body);
+        var intent = Intent.From(body);
         var awaiter = intent.GetAwaiter();
         Assert.False(awaiter.IsCompleted);
 

@@ -1,7 +1,7 @@
 namespace Intents;
 
 /// <summary>
-/// Ready-made policy packs for common scenarios. Pass to <see cref="Intent.Configure"/>.
+/// Ready-made policy packs for common scenarios. Pass to <see cref="Intent.Configure"/> or <c>WithPolicies</c>.
 /// </summary>
 public static class IntentProfile
 {
@@ -17,16 +17,16 @@ public static class IntentProfile
         TimeSpan? breakDuration = null,
         int maxParallelism = 32) =>
     [
-        Intent.Named(name),
-        Intent.Activity,
-        Intent.Metrics,
-        Intent.CircuitBreaker(name, failureThreshold, breakDuration),
-        Intent.Bulkhead(name, maxParallelism),
-        Intent.Retry(
+        IntentPolicies.Named(name),
+        IntentPolicies.Activity,
+        IntentPolicies.Metrics,
+        IntentPolicies.CircuitBreaker(name, failureThreshold, breakDuration),
+        IntentPolicies.Bulkhead(name, maxParallelism),
+        IntentPolicies.Retry(
             retryAttempts,
             IntentBackoff.Exponential(100.Milliseconds()),
             attemptTimeout: attemptTimeout ?? 2.Seconds()),
-        Intent.Timeout(timeout ?? 10.Seconds())
+        IntentPolicies.Timeout(timeout ?? 10.Seconds())
     ];
 
     /// <summary>
@@ -37,9 +37,9 @@ public static class IntentProfile
         string? atomicKey = null,
         int retryAttempts = 3) =>
     [
-        Intent.Named(name),
-        Intent.Activity,
-        Intent.AtomicOn(atomicKey ?? name),
-        Intent.Retry(retryAttempts)
+        IntentPolicies.Named(name),
+        IntentPolicies.Activity,
+        IntentPolicies.AtomicOn(atomicKey ?? name),
+        IntentPolicies.Retry(retryAttempts)
     ];
 }

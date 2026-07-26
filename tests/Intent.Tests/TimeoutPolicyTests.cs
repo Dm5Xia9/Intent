@@ -8,13 +8,13 @@ public class TimeoutPolicyTests
     {
         Func<Task> slow = async () => await Task.Delay(500);
         await Assert.ThrowsAsync<TimeoutException>(async () =>
-            await Intent.Run(slow).Configure(Intent.Timeout(50.Milliseconds())));
+            await Intent.From(slow).WithTimeout(50.Milliseconds()));
     }
 
     [Fact]
     public async Task Timeout_allows_fast_operation()
     {
         Func<Task> fast = async () => await Task.Delay(10);
-        await Intent.Run(fast).Configure(Intent.Timeout(2.Seconds()));
+        await Intent.From(fast).WithTimeout(2.Seconds());
     }
 }

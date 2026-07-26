@@ -22,7 +22,7 @@ public class AtomicPolicyTests
                 Interlocked.Decrement(ref inCritical);
             };
 
-            await Intent.Run(body).Configure(Intent.Atomic);
+            await Intent.From(body).WithAtomic();
         }
 
         await Task.WhenAll(Work(), Work(), Work());

@@ -22,50 +22,7 @@ public class Intent
 
     public bool IsCompleted => _tcs.Task.IsCompleted;
 
-    public static IntentPolicy Atomic { get; } = AtomicPolicy.Instance;
-
-    public static IntentPolicy AtomicOn(string key) => AtomicPolicy.ForKey(key);
-
-    public static IntentPolicy Cancel(CancellationToken token) => new CancelPolicy(token);
-
-    public static IntentPolicy Named(string name) => new NamedPolicy(name);
-
-    public static IntentPolicy Tag(string key, object? value) =>
-        new TagPolicy([new KeyValuePair<string, object?>(key, value)]);
-
-    public static IntentPolicy Tags(params (string Key, object? Value)[] tags) =>
-        new TagPolicy(tags.Select(t => new KeyValuePair<string, object?>(t.Key, t.Value)));
-
-    public static IntentPolicy Trace { get; } = TracePolicy.Instance;
-
-    public static IntentPolicy Metrics { get; } = MetricsPolicy.Instance;
-
-    public static IntentPolicy Activity { get; } = ActivityPolicy.Instance;
-
-    public static IntentPolicy Idempotent(string key, TimeSpan? ttl = null) =>
-        new IdempotentPolicy(key, ttl ?? TimeSpan.FromHours(1));
-
-    public static IntentPolicy Cache(string key, TimeSpan ttl) => new CachePolicy(key, ttl);
-
-    public static IntentPolicy CircuitBreaker(
-        string name,
-        int failureThreshold = 5,
-        TimeSpan? breakDuration = null) =>
-        new CircuitBreakerPolicy(name, failureThreshold, breakDuration ?? TimeSpan.FromSeconds(30));
-
-    public static IntentPolicy Bulkhead(string name, int maxParallelism) =>
-        new BulkheadPolicy(name, maxParallelism);
-
-    public static IntentPolicy Retry(
-        int attempts,
-        Func<int, TimeSpan>? backoff = null,
-        Func<Exception, bool>? shouldRetry = null,
-        TimeSpan? attemptTimeout = null) =>
-        new RetryPolicy(attempts, backoff, shouldRetry, attemptTimeout);
-
-    public static IntentPolicy Timeout(TimeSpan timeout) => new TimeoutPolicy(timeout);
-
-    public static Intent Run(Action action)
+    public static Intent From(Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
         var intent = new Intent();
@@ -78,7 +35,7 @@ public class Intent
         return intent;
     }
 
-    public static Intent Run(Func<Task> action)
+    public static Intent From(Func<Task> action)
     {
         ArgumentNullException.ThrowIfNull(action);
         var intent = new Intent();
@@ -86,7 +43,7 @@ public class Intent
         return intent;
     }
 
-    public static Intent Run(Func<CancellationToken, Task> action)
+    public static Intent From(Func<CancellationToken, Task> action)
     {
         ArgumentNullException.ThrowIfNull(action);
         var intent = new Intent();
@@ -98,7 +55,7 @@ public class Intent
     /// Creates an operation that invokes <paramref name="factory"/> when executed.
     /// Useful when the factory itself has side effects beyond a single Intent body.
     /// </summary>
-    public static Intent Defer(Func<Intent> factory)
+    public static Intent FromFactory(Func<Intent> factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
         var intent = new Intent();
@@ -110,7 +67,7 @@ public class Intent
         return intent;
     }
 
-    public static Intent<T> Run<T>(Func<T> func)
+    public static Intent<T> From<T>(Func<T> func)
     {
         ArgumentNullException.ThrowIfNull(func);
         var intent = new Intent<T>();
@@ -123,7 +80,7 @@ public class Intent
         return intent;
     }
 
-    public static Intent<T> Run<T>(Func<Task<T>> func)
+    public static Intent<T> From<T>(Func<Task<T>> func)
     {
         ArgumentNullException.ThrowIfNull(func);
         var intent = new Intent<T>();
@@ -135,7 +92,7 @@ public class Intent
         return intent;
     }
 
-    public static Intent<T> Run<T>(Func<CancellationToken, Task<T>> func)
+    public static Intent<T> From<T>(Func<CancellationToken, Task<T>> func)
     {
         ArgumentNullException.ThrowIfNull(func);
         var intent = new Intent<T>();
@@ -147,7 +104,7 @@ public class Intent
         return intent;
     }
 
-    public static Intent<T> Defer<T>(Func<Intent<T>> factory)
+    public static Intent<T> FromFactory<T>(Func<Intent<T>> factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
         var intent = new Intent<T>();
@@ -161,16 +118,16 @@ public class Intent
     }
 
     /// <summary>
-    /// Runs <paramref name="action"/> under <see cref="Atomic"/>.
-    /// Named <c>Atomically</c> because <see cref="Atomic"/> is the policy used with <c>Configure</c>.
+    /// Runs <paramref name="action"/> under <see cref="IntentPolicies.Atomic"/>.
+    /// Named <c>Atomically</c> because <see cref="IntentPolicies.Atomic"/> is the policy used with <c>Configure</c> / <c>WithAtomic</c>.
     /// </summary>
-    public static Intent Atomically(Action action) => Run(action).Configure(Atomic);
+    public static Intent Atomically(Action action) => From(action).Configure(IntentPolicies.Atomic);
 
-    public static Intent Atomically(Func<Task> action) => Run(action).Configure(Atomic);
+    public static Intent Atomically(Func<Task> action) => From(action).Configure(IntentPolicies.Atomic);
 
-    public static Intent Atomically(string key, Action action) => Run(action).Configure(AtomicOn(key));
+    public static Intent Atomically(string key, Action action) => From(action).Configure(IntentPolicies.AtomicOn(key));
 
-    public static Intent Atomically(string key, Func<Task> action) => Run(action).Configure(AtomicOn(key));
+    public static Intent Atomically(string key, Func<Task> action) => From(action).Configure(IntentPolicies.AtomicOn(key));
 
     /// <summary>
     /// Runs all intents concurrently (each is scheduled on await of the composite).
@@ -180,9 +137,9 @@ public class Intent
     {
         ArgumentNullException.ThrowIfNull(intents);
         if (intents.Length == 0)
-            return Run(() => { });
+            return From(() => { });
 
-        return Run(async () =>
+        return From(async () =>
         {
             var tasks = new Task[intents.Length];
             for (var i = 0; i < intents.Length; i++)
@@ -197,7 +154,7 @@ public class Intent
     public static Intent Sequence(params Intent[] intents)
     {
         ArgumentNullException.ThrowIfNull(intents);
-        return Run(async () =>
+        return From(async () =>
         {
             foreach (var intent in intents)
                 await intent;

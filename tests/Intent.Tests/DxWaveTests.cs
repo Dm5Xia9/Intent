@@ -18,10 +18,10 @@ public class DxWaveTests
     public async Task Idempotent_void_runs_body_once()
     {
         var calls = 0;
-        var policy = Intent.Idempotent("void-once", 5.Seconds());
+        var policy = IntentPolicies.Idempotent("void-once", 5.Seconds());
 
-        await Intent.Run(() => Interlocked.Increment(ref calls)).Configure(policy);
-        await Intent.Run(() => Interlocked.Increment(ref calls)).Configure(policy);
+        await Intent.From(() => Interlocked.Increment(ref calls)).Configure(policy);
+        await Intent.From(() => Interlocked.Increment(ref calls)).Configure(policy);
 
         Assert.Equal(1, calls);
     }
@@ -30,15 +30,15 @@ public class DxWaveTests
     public async Task Idempotent_result_returns_cached_value()
     {
         var calls = 0;
-        var policy = Intent.Idempotent("result-once", 5.Seconds());
+        var policy = IntentPolicies.Idempotent("result-once", 5.Seconds());
 
-        var a = await Intent.Run(() =>
+        var a = await Intent.From(() =>
         {
             Interlocked.Increment(ref calls);
             return 7;
         }).Configure(policy);
 
-        var b = await Intent.Run(() =>
+        var b = await Intent.From(() =>
         {
             Interlocked.Increment(ref calls);
             return 99;
@@ -54,10 +54,10 @@ public class DxWaveTests
     {
         var calls = 0;
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var policy = Intent.Idempotent("inflight", 5.Seconds());
+        var policy = IntentPolicies.Idempotent("inflight", 5.Seconds());
 
         async Task<int> Start() =>
-            await Intent.Run(async () =>
+            await Intent.From(async () =>
             {
                 Interlocked.Increment(ref calls);
                 await gate.Task;
@@ -79,16 +79,16 @@ public class DxWaveTests
     public async Task Idempotent_failure_does_not_stick()
     {
         var calls = 0;
-        var policy = Intent.Idempotent("fail-retry", 5.Seconds());
+        var policy = IntentPolicies.Idempotent("fail-retry", 5.Seconds());
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await Intent.Run(() =>
+            await Intent.From(() =>
             {
                 Interlocked.Increment(ref calls);
                 throw new InvalidOperationException("boom");
             }).Configure(policy));
 
-        await Intent.Run(() => Interlocked.Increment(ref calls)).Configure(policy);
+        await Intent.From(() => Interlocked.Increment(ref calls)).Configure(policy);
         Assert.Equal(2, calls);
     }
 
@@ -113,12 +113,12 @@ public class DxWaveTests
         };
         ActivitySource.AddActivityListener(listener);
 
-        await Intent.Run(() => { })
+        await Intent.From(() => { })
             .Configure(
-                Intent.Named("Tagged"),
-                Intent.Tag("userId", "u1"),
-                Intent.Trace,
-                Intent.Activity);
+                IntentPolicies.Named("Tagged"),
+                IntentPolicies.Tag("userId", "u1"),
+                IntentPolicies.Trace,
+                IntentPolicies.Activity);
 
         Assert.NotNull(seen);
         Assert.Equal("u1", seen!["userId"]);
@@ -127,7 +127,7 @@ public class DxWaveTests
     [Fact]
     public async Task Profile_Http_applies_named_metrics()
     {
-        await Intent.Run(() => { }).Configure(IntentProfile.Http("demo-http"));
+        await Intent.From(() => { }).Configure(IntentProfile.Http("demo-http"));
         Assert.Equal(1, IntentMetrics.GetCount("demo-http"));
     }
 
@@ -137,7 +137,7 @@ public class DxWaveTests
         var depth = 0;
         var max = 0;
 
-        Intent Make() => Intent.Run(async () =>
+        Intent Make() => Intent.From(async () =>
         {
             var n = Interlocked.Increment(ref depth);
             max = Math.Max(max, n);
@@ -152,8 +152,8 @@ public class DxWaveTests
     [Fact]
     public async Task Then_and_Select_chain_results()
     {
-        var result = await Intent.Run(() => 2)
-            .Then(x => Intent.Run(() => x * 3))
+        var result = await Intent.From(() => 2)
+            .Then(x => Intent.From(() => x * 3))
             .Select(x => x + 1);
 
         Assert.Equal(7, result);
@@ -162,7 +162,7 @@ public class DxWaveTests
     [Fact]
     public async Task Then_with_task_delegate()
     {
-        var result = await Intent.Run(() => 5)
+        var result = await Intent.From(() => 5)
             .Then(async (x, _) =>
             {
                 await Task.Yield();

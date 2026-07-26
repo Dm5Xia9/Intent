@@ -16,7 +16,9 @@ Cancel
                                                └─ Retry (+ optional attemptTimeout)
                                                     └─ Bulkhead
                                                          └─ Atomic
-                                                              └─ user code
+                                                              └─ Before
+                                                                   └─ After
+                                                                        └─ user code
 ```
 
 | Политика | Order |
@@ -34,6 +36,8 @@ Cancel
 | Retry | 1 |
 | Bulkhead | 2 |
 | Atomic | 3 |
+| Before | 4 |
+| After | 5 |
 
 Порядок аргументов в `Configure` не важен.
 
@@ -46,7 +50,8 @@ Cancel
 - **Cache** снаружи Circuit — cache hit не трогает circuit.
 - **Timeout** снаружи Retry — общий бюджет; `attemptTimeout` внутри Retry — лимит на попытку.
 - **Bulkhead** перед Atomic — сначала слот пула, потом (опционально) mutex.
-- **Atomic** ближе всего к коду.
+- **Atomic** перед Before/After — хуки и тело под одним mutex (если Atomic включён).
+- **Before / After** внутри Retry — на **каждую** попытку тела; After в `finally` (и при ошибке).
 
 ## Композиция планов
 

@@ -1,6 +1,6 @@
 # Intent — модель отложенного выполнения
 
-`Intent` — это намерение выполнить работу: вызов метода создаёт холодный план, а не запускает код. План описывает **что** сделать; через `Configure` к нему цепляют политики — **как** выполнять (retry, timeout, идемпотентность, изоляция…). Реальное выполнение начинается на `await`. Один и тот же метод можно запускать в разных режимах, не меняя его тело.
+`Intent` — это намерение выполнить работу: вызов метода создаёт холодный план, а не запускает код. План описывает **что** сделать; через `With*` / `Configure` к нему цепляют политики — **как** выполнять (retry, timeout, идемпотентность, изоляция…). Реальное выполнение начинается на `await`. Один и тот же метод можно запускать в разных режимах, не меняя его тело.
 
 Полная документация: **[docs/](docs/README.md)**.
 
@@ -15,13 +15,10 @@ async Intent ProcessOrder(string orderId)
 }
 
 // холодный план — тело ещё не выполняется
-var plan = ProcessOrder("42");
-
-plan.Configure(
-    Intent.Named("Checkout"),
-    Intent.Retry(3),
-    Intent.Timeout(10.Seconds())
-);
+var plan = ProcessOrder("42")
+    .WithNamed("Checkout")
+    .WithRetry(3)
+    .WithTimeout(10.Seconds());
 
 await plan; // только здесь стартует pipeline + тело
 ```
@@ -39,12 +36,15 @@ await plan; // только здесь стартует pipeline + тело
 | `Timeout` / `Retry(..., attemptTimeout:)` | Бюджет и ретраи |
 | `Bulkhead(name, max)` | Лимит параллелизма |
 | `Atomic` / `AtomicOn(key)` | Mutual exclusion |
+| `Before` / `After` | Хуки на каждую попытку тела |
+
+Фабрики: `IntentPolicies.*`. Fluent: `.WithRetry(3).WithTimeout(...)`. Пакеты: `Configure` / `WithPolicies(IntentProfile.Http(...))`.
 
 Pipeline:
 
 ```
 Cancel → Named → Tag → Trace → Activity → Metrics → Idempotent → Cache
-  → CircuitBreaker → Timeout → Retry → Bulkhead → Atomic → код
+  → CircuitBreaker → Timeout → Retry → Bulkhead → Atomic → Before → After → код
 ```
 
 ## Композиция
@@ -52,10 +52,10 @@ Cancel → Named → Tag → Trace → Activity → Metrics → Idempotent → C
 ```csharp
 await Intent.WhenAll(a, b, c);
 await Intent.Sequence(a, b, c);
-Intent.Run(Work).Configure(Intent.Retry(3)).Background();
+Intent.From(Work).WithRetry(3).Background();
 
-var total = await Intent.Run(() => Load(id))
-    .Then(x => Intent.Run(() => Enrich(x)))
+var total = await Intent.From(() => Load(id))
+    .Then(x => Intent.From(() => Enrich(x)))
     .Select(x => x.Total);
 ```
 

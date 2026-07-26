@@ -23,7 +23,7 @@ public class NewPoliciesTests
         };
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-            await Intent.Run(body).Configure(Intent.Cancel(cts.Token)));
+            await Intent.From(body).WithCancel(cts.Token));
     }
 
     [Fact]
@@ -40,7 +40,7 @@ public class NewPoliciesTests
 
         cts.CancelAfter(30);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-            await Intent.Run(body).Configure(Intent.Cancel(cts.Token)));
+            await Intent.From(body).WithCancel(cts.Token));
         Assert.True(entered);
     }
 
@@ -61,7 +61,7 @@ public class NewPoliciesTests
                 await Task.Delay(40);
                 Interlocked.Decrement(ref a);
             };
-            await Intent.Run(body).Configure(Intent.AtomicOn("a"));
+            await Intent.From(body).WithAtomicOn("a");
         }
 
         async Task WorkB()
@@ -73,7 +73,7 @@ public class NewPoliciesTests
                 await Task.Delay(40);
                 Interlocked.Decrement(ref b);
             };
-            await Intent.Run(body).Configure(Intent.AtomicOn("b"));
+            await Intent.From(body).WithAtomicOn("b");
         }
 
         await Task.WhenAll(WorkA(), WorkA(), WorkB(), WorkB());
@@ -87,13 +87,13 @@ public class NewPoliciesTests
         var attempts = 0;
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
-        await Intent.Run(() =>
+        await Intent.From(() =>
             {
                 attempts++;
                 if (attempts < 3)
                     throw new InvalidOperationException("x");
             })
-            .Configure(Intent.Retry(3, IntentBackoff.Constant(30.Milliseconds())));
+            .WithRetry(3, IntentBackoff.Constant(30.Milliseconds()));
 
         sw.Stop();
         Assert.Equal(3, attempts);
@@ -105,12 +105,12 @@ public class NewPoliciesTests
     {
         var attempts = 0;
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await Intent.Run(() =>
+            await Intent.From(() =>
                 {
                     attempts++;
                     throw new InvalidOperationException("nope");
                 })
-                .Configure(Intent.Retry(5, shouldRetry: ex => ex is TimeoutException)));
+                .WithRetry(5, shouldRetry: ex => ex is TimeoutException));
 
         Assert.Equal(1, attempts);
     }
@@ -123,8 +123,8 @@ public class NewPoliciesTests
         IntentDiagnostics.Traced += e => traces.Add(e);
         IntentDiagnostics.Measured += e => metrics.Add(e);
 
-        await Intent.Run(() => { })
-            .Configure(Intent.Named("Checkout"), Intent.Trace, Intent.Metrics);
+        await Intent.From(() => { })
+            .Configure(IntentPolicies.Named("Checkout"), IntentPolicies.Trace, IntentPolicies.Metrics);
 
         Assert.Contains(traces, t => t.Name == "Checkout" && t.Phase == IntentTracePhase.Started);
         Assert.Contains(traces, t => t.Name == "Checkout" && t.Phase == IntentTracePhase.Succeeded);
@@ -143,8 +143,8 @@ public class NewPoliciesTests
             return 7;
         };
 
-        Assert.Equal(7, await Intent.Run(body).Configure(Intent.Cache("k1", 1.Seconds())));
-        Assert.Equal(7, await Intent.Run(body).Configure(Intent.Cache("k1", 1.Seconds())));
+        Assert.Equal(7, await Intent.From(body).WithCache("k1", 1.Seconds()));
+        Assert.Equal(7, await Intent.From(body).WithCache("k1", 1.Seconds()));
         Assert.Equal(1, calls);
     }
 
@@ -158,9 +158,9 @@ public class NewPoliciesTests
             return calls;
         };
 
-        Assert.Equal(1, await Intent.Run(body).Configure(Intent.Cache("exp", 40.Milliseconds())));
+        Assert.Equal(1, await Intent.From(body).WithCache("exp", 40.Milliseconds()));
         await Task.Delay(60);
-        Assert.Equal(2, await Intent.Run(body).Configure(Intent.Cache("exp", 40.Milliseconds())));
+        Assert.Equal(2, await Intent.From(body).WithCache("exp", 40.Milliseconds()));
         Assert.Equal(2, calls);
     }
 

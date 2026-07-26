@@ -5,7 +5,7 @@ Namespace: `Intents`.
 ## Фабрики и композиция
 
 ```csharp
-Intent.Run(...) / Intent.Defer(...)
+Intent.From(...) / Intent.FromFactory(...)
 Intent.Atomically(...) / Intent.Atomically(key, ...)
 
 Intent.WhenAll(params Intent[])
@@ -19,20 +19,34 @@ intent.Select(x => map(x))          // map результата
 
 ## Политики
 
+Фабрики: `IntentPolicies.*`. Fluent на плане: `With*`.
+
 ```csharp
-Intent.Cancel(CancellationToken)                 // -20
-Intent.Named(string)                             // -15
-Intent.Tag(key, value) / Tags((k,v), ...)        // -14
-Intent.Trace                                     // -10
-Intent.Activity                                  // -8  (ActivitySource "Intents.Intent")
-Intent.Metrics                                   // -5
-Intent.Idempotent(key, ttl?)                     // -4  (default TTL 1h)
-Intent.Cache(key, ttl)                           // -3
-Intent.CircuitBreaker(name, threshold=5, break?) // -2
-Intent.Timeout(TimeSpan)                         // 0
-Intent.Retry(attempts, backoff?, shouldRetry?, attemptTimeout?) // 1
-Intent.Bulkhead(name, maxParallelism)            // 2
-Intent.Atomic / Intent.AtomicOn(key)             // 3
+// Fluent (предпочтительно)
+work.WithNamed("Checkout").WithRetry(3).WithTimeout(10.Seconds());
+
+// Фабрики + Configure / WithPolicies (пакеты, кастом)
+work.Configure(IntentPolicies.Retry(3), IntentPolicies.Timeout(5.Seconds()));
+work.WithPolicies(IntentProfile.Http("Fetch"), IntentPolicies.Cancel(ct));
+work.WithPolicies(new MyPolicy());
+```
+
+```csharp
+IntentPolicies.Cancel(CancellationToken)                 // -20  → WithCancel
+IntentPolicies.Named(string)                             // -15  → WithNamed
+IntentPolicies.Tag / Tags                                // -14  → WithTag / WithTags
+IntentPolicies.Trace                                     // -10  → WithTrace
+IntentPolicies.Activity                                  // -8   → WithActivity
+IntentPolicies.Metrics                                   // -5   → WithMetrics
+IntentPolicies.Idempotent(key, ttl?)                     // -4   → WithIdempotent
+IntentPolicies.Cache(key, ttl)                           // -3   → WithCache
+IntentPolicies.CircuitBreaker(name, …)                   // -2   → WithCircuitBreaker
+IntentPolicies.Timeout(TimeSpan)                         // 0    → WithTimeout
+IntentPolicies.Retry(…)                                  // 1    → WithRetry
+IntentPolicies.Bulkhead(name, max)                       // 2    → WithBulkhead
+IntentPolicies.Atomic / AtomicOn(key)                    // 3    → WithAtomic / WithAtomicOn
+IntentPolicies.Before(...)                               // 4    → WithBefore
+IntentPolicies.After(...)                                // 5    → WithAfter
 ```
 
 Пресеты: `IntentProfile.Http(...)` / `IntentProfile.DbWrite(...)`.
@@ -44,18 +58,18 @@ Backoff: `IntentBackoff.Constant` / `Exponential`.
 ## Примеры
 
 ```csharp
-await Intent.Run(async ct => await client.GetAsync(url, ct))
-    .Configure(IntentProfile.Http("Fetch"), Intent.Cancel(ct));
+await Intent.From(async ct => await client.GetAsync(url, ct))
+    .WithPolicies(IntentProfile.Http("Fetch"))
+    .WithCancel(ct);
 
-await Intent.Run(() => Charge(cmd))
-    .Configure(
-        Intent.Idempotent($"pay:{cmd.Key}"),
-        Intent.Named("Charge"),
-        Intent.Tag("userId", cmd.UserId),
-        Intent.Retry(3));
+await Intent.From(() => Charge(cmd))
+    .WithIdempotent($"pay:{cmd.Key}")
+    .WithNamed("Charge")
+    .WithTag("userId", cmd.UserId)
+    .WithRetry(3);
 
 await Intent.WhenAll(LoadA(), LoadB());
-LoadC().Configure(Intent.Retry(2)).Background();
+LoadC().WithRetry(2).Background();
 ```
 
 ## Ограничения

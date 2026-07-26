@@ -47,7 +47,7 @@ public class Intent { ... }
 
 ## Два вида body
 
-### 1. Делегат (`Run` / `Defer`)
+### 1. Делегат (`From` / `FromFactory`)
 
 ```csharp
 _body = ct => { action(); return Task.CompletedTask; };
@@ -69,7 +69,7 @@ _body = ExecuteStateMachineAsync;
 3. `clone.MoveNext()`.
 4. Ждёт `_smRun`.
 
-Так `await Flaky().Configure(Intent.Retry(3))` работает без `Defer`: каждая попытка — свежая state machine с capturenными аргументами исходного вызова.
+Так `await Flaky().Configure(IntentPolicies.Retry(3))` работает без `FromFactory`: каждая попытка — свежая state machine с capturenными аргументами исходного вызова.
 
 Когда SM доходит до конца, builder зовёт `SetResult`/`SetException` → завершается `_smRun`, а не сразу внешний TCS. Внешний TCS завершает `RunPipelineAsync` после выхода из pipeline (успех) или через `FaultOuter` (ошибка).
 
@@ -112,7 +112,7 @@ public IntentAwaiter GetAwaiter()
 
 ## Atomic
 
-Один процессный `SemaphoreSlim(1,1)` на все `Intent.Atomic`. Это **не** распределённый лок и не per-resource lock. Для разных ресурсов в будущем понадобятся ключи/scopes.
+Один процессный `SemaphoreSlim(1,1)` на все `IntentPolicies.Atomic`. Это **не** распределённый лок и не per-resource lock. Для разных ресурсов в будущем понадобятся ключи/scopes.
 
 ## Производительность (ожидания)
 

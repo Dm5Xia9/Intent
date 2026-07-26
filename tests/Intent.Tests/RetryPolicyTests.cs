@@ -7,13 +7,13 @@ public class RetryPolicyTests
     public async Task Retry_succeeds_after_transient_failures()
     {
         var attempts = 0;
-        await Intent.Run(() =>
+        await Intent.From(() =>
             {
                 attempts++;
                 if (attempts < 3)
                     throw new InvalidOperationException("fail");
             })
-            .Configure(Intent.Retry(3));
+            .WithRetry(3);
 
         Assert.Equal(3, attempts);
     }
@@ -29,7 +29,7 @@ public class RetryPolicyTests
         };
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await Intent.Run(body).Configure(Intent.Retry(3)));
+            await Intent.From(body).WithRetry(3));
 
         Assert.Equal(3, attempts);
         Assert.Equal("fail-3", ex.Message);
@@ -48,7 +48,7 @@ public class RetryPolicyTests
             await Task.Yield();
         }
 
-        await Flaky().Configure(Intent.Retry(3));
+        await Flaky().WithRetry(3);
         Assert.Equal(3, attempts);
     }
 }
