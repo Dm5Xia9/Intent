@@ -2,6 +2,7 @@ namespace Intents;
 
 /// <summary>
 /// Factories for built-in <see cref="IntentPolicy"/> instances. Prefer <c>With*</c> on an Intent for fluent configuration.
+/// Resilience (retry, timeout, circuit breaker, bulkhead) lives in the <c>Intent.Polly</c> package.
 /// </summary>
 public static class IntentPolicies
 {
@@ -29,24 +30,6 @@ public static class IntentPolicies
         new IdempotentPolicy(key, ttl ?? TimeSpan.FromHours(1));
 
     public static IntentPolicy Cache(string key, TimeSpan ttl) => new CachePolicy(key, ttl);
-
-    public static IntentPolicy CircuitBreaker(
-        string name,
-        int failureThreshold = 5,
-        TimeSpan? breakDuration = null) =>
-        new CircuitBreakerPolicy(name, failureThreshold, breakDuration ?? TimeSpan.FromSeconds(30));
-
-    public static IntentPolicy Bulkhead(string name, int maxParallelism) =>
-        new BulkheadPolicy(name, maxParallelism);
-
-    public static IntentPolicy Retry(
-        int attempts,
-        Func<int, TimeSpan>? backoff = null,
-        Func<Exception, bool>? shouldRetry = null,
-        TimeSpan? attemptTimeout = null) =>
-        new RetryPolicy(attempts, backoff, shouldRetry, attemptTimeout);
-
-    public static IntentPolicy Timeout(TimeSpan timeout) => new TimeoutPolicy(timeout);
 
     public static IntentPolicy Before(Action action)
     {

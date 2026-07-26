@@ -16,28 +16,6 @@ public class BeforeAfterPolicyTests
     }
 
     [Fact]
-    public async Task Before_and_After_run_on_each_Retry_attempt()
-    {
-        var log = new List<string>();
-        var attempts = 0;
-
-        await Intent.From(() =>
-            {
-                attempts++;
-                log.Add($"body-{attempts}");
-                if (attempts < 3)
-                    throw new InvalidOperationException("fail");
-            })
-            .WithRetry(3)
-            .WithBefore(() => log.Add("before"))
-            .WithAfter(() => log.Add("after"));
-
-        Assert.Equal(
-            ["before", "body-1", "after", "before", "body-2", "after", "before", "body-3", "after"],
-            log);
-    }
-
-    [Fact]
     public async Task After_runs_when_body_faults()
     {
         var after = 0;

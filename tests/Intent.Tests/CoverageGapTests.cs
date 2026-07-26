@@ -24,21 +24,15 @@ public class CoverageGapTests
     }
 
     [Fact]
-    public async Task Defer_T_recreates_async_Intent_each_attempt()
+    public async Task FromFactory_T_awaits_inner_Intent()
     {
-        var attempts = 0;
-
-        async Intent<int> Flaky()
+        async Intent<int> Inner()
         {
-            attempts++;
             await Task.Yield();
-            if (attempts < 3)
-                throw new InvalidOperationException("fail");
             return 9;
         }
 
-        Assert.Equal(9, await Intent.FromFactory(() => Flaky()).WithRetry(3));
-        Assert.Equal(3, attempts);
+        Assert.Equal(9, await Intent.FromFactory(() => Inner()));
     }
 
     [Fact]
@@ -67,38 +61,30 @@ public class CoverageGapTests
     }
 
     [Fact]
-    public async Task Retry_reexecutes_async_Intent_without_Defer()
+    public async Task Async_Intent_void_runs_to_completion()
     {
-        var attempts = 0;
+        var ran = false;
 
-        async Intent Flaky()
+        async Intent Work()
         {
-            attempts++;
             await Task.Yield();
-            if (attempts < 3)
-                throw new InvalidOperationException("fail");
+            ran = true;
         }
 
-        await Flaky().WithRetry(3);
-        Assert.Equal(3, attempts);
+        await Work();
+        Assert.True(ran);
     }
 
     [Fact]
-    public async Task Retry_reexecutes_async_Intent_T_without_Defer()
+    public async Task Async_Intent_T_returns_value()
     {
-        var attempts = 0;
-
-        async Intent<int> Flaky()
+        async Intent<int> Work()
         {
-            attempts++;
             await Task.Yield();
-            if (attempts < 3)
-                throw new InvalidOperationException("fail");
             return 42;
         }
 
-        Assert.Equal(42, await Flaky().WithRetry(3));
-        Assert.Equal(3, attempts);
+        Assert.Equal(42, await Work());
     }
 
     [Fact]
@@ -106,13 +92,13 @@ public class CoverageGapTests
     {
         var intent = Intent.From(() => 1);
         await intent;
-        Assert.Throws<InvalidOperationException>(() => intent.WithRetry(1));
+        Assert.Throws<InvalidOperationException>(() => intent.WithNamed("late"));
     }
 
     [Fact]
     public async Task Intent_T_Configure_configures_before_run()
     {
-        var intent = Intent.From(() => 1).WithRetry(1);
+        var intent = Intent.From(() => 1).WithNamed("early");
         Assert.Equal(IntentLifecycle.Configured, intent.Lifecycle);
         Assert.Equal(1, await intent);
     }
@@ -185,21 +171,6 @@ public class CoverageGapTests
         intent.Schedule();
         intent.Schedule();
         Assert.Equal(1, await intent);
-    }
-
-    [Fact]
-    public void Retry_rejects_non_positive_attempts()
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() => IntentPolicies.Retry(0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new RetryPolicy(-1));
-    }
-
-    [Fact]
-    public void Timeout_rejects_non_positive_duration()
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() => IntentPolicies.Timeout(TimeSpan.Zero));
-        Assert.Throws<ArgumentOutOfRangeException>(() => IntentPolicies.Timeout((-1).Seconds()));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new TimeoutPolicy(TimeSpan.FromMilliseconds(-5)));
     }
 
     [Fact]
@@ -419,7 +390,7 @@ public class CoverageGapTests
     {
         var intent = new Intent();
         intent.BindStateMachine(new DummyStateMachine());
-        typeof(Intent)
+        typeof(IntentPlan)
             .GetField("_template", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
             .SetValue(intent, null);
 
@@ -432,7 +403,7 @@ public class CoverageGapTests
     {
         var intent = new Intent<int>();
         intent.BindStateMachine(new DummyStateMachine());
-        typeof(Intent<int>)
+        typeof(IntentPlan)
             .GetField("_template", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
             .SetValue(intent, null);
 
@@ -453,12 +424,12 @@ public class CoverageGapTests
     }
 
     [Fact]
-    public async Task Retry_does_not_swallow_operation_canceled()
+    public async Task Cancel_policy_propagates_operation_canceled()
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        var policy = new RetryPolicy(3);
+        var policy = IntentPolicies.Cancel(cts.Token);
         var wrapped = policy.Wrap(_ => Task.FromCanceled(cts.Token));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>

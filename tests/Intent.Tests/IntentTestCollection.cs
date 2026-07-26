@@ -1,7 +1,7 @@
 namespace Intents.Tests;
 
 /// <summary>
-/// Intent uses process-wide static stores (metrics, cache, circuit, diagnostics).
+/// Intent uses process-wide static stores (cache, idempotency, diagnostics).
 /// Run tests in this collection sequentially.
 /// </summary>
 [CollectionDefinition("Intent")]

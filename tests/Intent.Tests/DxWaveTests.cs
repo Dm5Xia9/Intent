@@ -7,11 +7,9 @@ public class DxWaveTests
 {
     public DxWaveTests()
     {
-        IntentMetrics.Reset();
         IntentCacheStore.Clear();
         IntentIdempotencyStore.Clear();
         IntentDiagnostics.Reset();
-        CircuitBreakerPolicy.ResetAll();
     }
 
     [Fact]
@@ -93,7 +91,7 @@ public class DxWaveTests
     }
 
     [Fact]
-    public async Task Tag_appears_on_trace_and_activity()
+    public async Task Tag_appears_on_activity_tags_and_baggage()
     {
         IReadOnlyDictionary<string, object?>? seen = null;
         IntentDiagnostics.Traced += e =>
@@ -102,14 +100,12 @@ public class DxWaveTests
                 seen = e.Tags;
         };
 
+        Activity? activity = null;
         using var listener = new ActivityListener
         {
-            ShouldListenTo = s => s.Name == "Intents.Intent",
+            ShouldListenTo = s => s.Name == IntentInstrumentation.Name,
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
-            ActivityStarted = a =>
-            {
-                Assert.Equal("u1", a.GetTagItem("userId"));
-            }
+            ActivityStarted = a => activity = a
         };
         ActivitySource.AddActivityListener(listener);
 
@@ -122,31 +118,9 @@ public class DxWaveTests
 
         Assert.NotNull(seen);
         Assert.Equal("u1", seen!["userId"]);
-    }
-
-    [Fact]
-    public async Task Profile_Http_applies_named_metrics()
-    {
-        await Intent.From(() => { }).Configure(IntentProfile.Http("demo-http"));
-        Assert.Equal(1, IntentMetrics.GetCount("demo-http"));
-    }
-
-    [Fact]
-    public async Task Profile_DbWrite_serializes_on_atomic_key()
-    {
-        var depth = 0;
-        var max = 0;
-
-        Intent Make() => Intent.From(async () =>
-        {
-            var n = Interlocked.Increment(ref depth);
-            max = Math.Max(max, n);
-            await Task.Delay(40);
-            Interlocked.Decrement(ref depth);
-        }).Configure(IntentProfile.DbWrite("dbw", atomicKey: "dbw"));
-
-        await Intent.WhenAll(Make(), Make(), Make());
-        Assert.Equal(1, max);
+        Assert.NotNull(activity);
+        Assert.Equal("u1", activity!.GetTagItem("userId"));
+        Assert.Equal("u1", activity.GetBaggageItem("userId"));
     }
 
     [Fact]

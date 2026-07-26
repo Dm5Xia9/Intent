@@ -6,7 +6,7 @@
 |--|------------------------|---------------------------|
 | Когда стартует тело | При **вызове** метода | При **await** (schedule) |
 | Что возвращает вызов | Уже бегущую (или завершённую) операцию | Холодный план |
-| Политики исполнения | Снаружи или внутри вручную | `Configure` + pipeline |
+| Политики исполнения | Снаружи или внутри вручную | `With*` / `Configure` + pipeline |
 | Свой scheduler | Thread pool / sync context / custom | Тот же CLR: поверх `Task` + TCS |
 | Повтор выполнения | Нужен новый вызов метода | `Retry` (клонирует body / state machine) |
 
@@ -43,7 +43,7 @@ await t;
 
 ```csharp
 var intent = LoadAsIntent(); // сеть ещё не тронута
-intent = intent.Configure(IntentPolicies.Timeout(2.Seconds()));
+intent = intent.WithTimeout(2.Seconds());
 await intent; // только здесь MoveNext → реальная работа
 ```
 
@@ -86,10 +86,12 @@ Intent:  call ──► plan ──► configure ──► await ──► runni
 `Intent` с `Retry` повторно вызывает body: для делегатов — тот же `Func`, для `async Intent` — **клон** ещё не запущенной state machine (шаблон сохраняется при создании плана).
 
 ```csharp
-await Flaky().Configure(IntentPolicies.Retry(3));
+await Flaky().WithRetry(3);
 ```
 
 `FromFactory` нужен только если фабрика сама должна выполняться заново (побочные эффекты вне тела Intent), а не для обычного Retry.
+
+Полный контракт (captures, nested await, double-await, cancel/timeout): **[09-sm-clone-contract.md](09-sm-clone-contract.md)**.
 
 ## Когда оставить Task
 

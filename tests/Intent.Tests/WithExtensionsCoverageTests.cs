@@ -17,12 +17,7 @@ public class WithExtensionsCoverageTests
             .WithTags(("a", 1), ("b", 2))
             .WithTrace()
             .WithActivity()
-            .WithMetrics()
             .WithIdempotent("with-void-idem", 1.Seconds())
-            .WithCircuitBreaker("with-void-cb")
-            .WithTimeout(5.Seconds())
-            .WithRetry(2)
-            .WithBulkhead("with-void-bh", 4)
             .WithAtomicOn("with-void-atomic")
             .WithBefore(() => log.Add("before-sync"))
             .WithBefore(async () => { log.Add("before-task"); await Task.Yield(); })
@@ -55,13 +50,8 @@ public class WithExtensionsCoverageTests
             .WithTags(("a", 1))
             .WithTrace()
             .WithActivity()
-            .WithMetrics()
             .WithIdempotent("with-t-idem", 1.Seconds())
             .WithCache("with-t-cache", 1.Seconds())
-            .WithCircuitBreaker("with-t-cb")
-            .WithTimeout(5.Seconds())
-            .WithRetry(2)
-            .WithBulkhead("with-t-bh", 4)
             .WithAtomic()
             .WithAtomicOn("with-t-atomic")
             .WithBefore(() => before++)
@@ -75,7 +65,6 @@ public class WithExtensionsCoverageTests
         Assert.Equal(3, before);
         Assert.Equal(3, after);
 
-        // cache hit path via WithCache on Intent<T>
         Assert.Equal(7, await Intent.From(() => 99).WithCache("with-t-cache", 1.Seconds()));
     }
 

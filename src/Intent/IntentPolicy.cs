@@ -7,7 +7,8 @@ public interface IntentPolicy
 {
     /// <summary>
     /// Lower values wrap outer (run first). Normalized pipeline order:
-    /// Cancel → Named → Tag → Trace → Activity → Metrics → Idempotent → Cache → CircuitBreaker → Timeout → Retry → Bulkhead → Atomic → Before → After → user code.
+    /// Cancel → Named → Tag → Trace → Activity → Metrics → Idempotent → Cache → (Intent.Polly) → Atomic → Before → After → user code.
+    /// Numeric values: <see cref="IntentPipelineOrder"/> (frozen; see CHANGELOG).
     /// </summary>
     int Order { get; }
 

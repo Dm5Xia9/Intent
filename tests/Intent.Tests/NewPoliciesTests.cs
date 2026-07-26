@@ -1,3 +1,5 @@
+using System.Diagnostics.Metrics;
+
 namespace Intents.Tests;
 
 [Collection("Intent")]
@@ -5,7 +7,6 @@ public class NewPoliciesTests
 {
     public NewPoliciesTests()
     {
-        IntentMetrics.Reset();
         IntentCacheStore.Clear();
         IntentDiagnostics.Reset();
     }
@@ -82,55 +83,57 @@ public class NewPoliciesTests
     }
 
     [Fact]
-    public async Task Retry_with_backoff_delays_between_attempts()
-    {
-        var attempts = 0;
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-
-        await Intent.From(() =>
-            {
-                attempts++;
-                if (attempts < 3)
-                    throw new InvalidOperationException("x");
-            })
-            .WithRetry(3, IntentBackoff.Constant(30.Milliseconds()));
-
-        sw.Stop();
-        Assert.Equal(3, attempts);
-        Assert.True(sw.ElapsedMilliseconds >= 50, $"elapsed={sw.ElapsedMilliseconds}");
-    }
-
-    [Fact]
-    public async Task Retry_filter_skips_non_matching_exceptions()
-    {
-        var attempts = 0;
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await Intent.From(() =>
-                {
-                    attempts++;
-                    throw new InvalidOperationException("nope");
-                })
-                .WithRetry(5, shouldRetry: ex => ex is TimeoutException));
-
-        Assert.Equal(1, attempts);
-    }
-
-    [Fact]
-    public async Task Named_Trace_Metrics_emit_events()
+    public async Task Named_Trace_emit_events()
     {
         var traces = new List<IntentTraceEvent>();
-        var metrics = new List<IntentMetricEvent>();
         IntentDiagnostics.Traced += e => traces.Add(e);
-        IntentDiagnostics.Measured += e => metrics.Add(e);
 
         await Intent.From(() => { })
-            .Configure(IntentPolicies.Named("Checkout"), IntentPolicies.Trace, IntentPolicies.Metrics);
+            .Configure(IntentPolicies.Named("Checkout"), IntentPolicies.Trace);
 
         Assert.Contains(traces, t => t.Name == "Checkout" && t.Phase == IntentTracePhase.Started);
         Assert.Contains(traces, t => t.Name == "Checkout" && t.Phase == IntentTracePhase.Succeeded);
-        Assert.Contains(metrics, m => m.Name == "Checkout" && m.Success);
-        Assert.Equal(1, IntentMetrics.GetCount("Checkout"));
-        Assert.Equal(1, IntentMetrics.GetSuccesses("Checkout"));
+    }
+
+    [Fact]
+    public async Task Named_Metrics_emits_system_diagnostics_instruments()
+    {
+        long count = 0;
+        double? duration = null;
+        string? outcome = null;
+
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name == IntentInstrumentation.Name)
+                l.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<long>((inst, measurement, tags, _) =>
+        {
+            if (inst.Name == IntentInstrumentation.ExecutionCountInstrument)
+            {
+                count += measurement;
+                foreach (var tag in tags)
+                {
+                    if (tag.Key == "intent.outcome")
+                        outcome = tag.Value?.ToString();
+                }
+            }
+        });
+        listener.SetMeasurementEventCallback<double>((inst, measurement, tags, _) =>
+        {
+            if (inst.Name == IntentInstrumentation.ExecutionDurationInstrument)
+                duration = measurement;
+        });
+        listener.Start();
+
+        await Intent.From(() => { })
+            .Configure(IntentPolicies.Named("Checkout"), IntentPolicies.Metrics);
+
+        Assert.Equal(1, count);
+        Assert.Equal("success", outcome);
+        Assert.NotNull(duration);
+        Assert.True(duration >= 0);
     }
 
     [Fact]

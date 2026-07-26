@@ -1,7 +1,10 @@
+using Intents.Polly;
+using Intents.Time;
+
 namespace Intents.Examples;
 
 /// <summary>
-/// Example custom profile: a reusable IntentPolicy[] pack (same idea as IntentProfile.Http).
+/// Example custom profile: a reusable IntentPolicy[] pack (same idea as IntentPolly.Http).
 /// </summary>
 static class AppProfiles
 {
@@ -15,7 +18,7 @@ static class AppProfiles
     [
         IntentPolicies.Named(name),
         new ConsoleLogPolicy(),
-        IntentPolicies.Retry(retryAttempts, IntentBackoff.Constant(15.Milliseconds())),
-        IntentPolicies.Timeout(timeout ?? 5.Seconds()),
+        IntentPolly.Retry(retryAttempts, IntentBackoff.Constant(15.Milliseconds())),
+        IntentPolly.Timeout(timeout ?? 5.Seconds()),
     ];
 }

@@ -24,7 +24,7 @@ public sealed class TagPolicy : IntentPolicy
     public IReadOnlyDictionary<string, object?> Tags => _tags;
 
     /// <summary>Just inside Named so tags see the operation name scope.</summary>
-    public int Order => -14;
+    public int Order => IntentPipelineOrder.Tag;
 
     public Func<CancellationToken, Task> Wrap(Func<CancellationToken, Task> next)
     {

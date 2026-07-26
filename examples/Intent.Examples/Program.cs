@@ -1,5 +1,7 @@
 using Intents;
 using Intents.Examples;
+using Intents.Polly;
+using Intents.Time;
 
 Console.WriteLine("=== Intent examples ===\n");
 
@@ -34,7 +36,7 @@ static async Task DeferredProcessOrder()
 
 static async Task RetryAndTimeout()
 {
-    Console.WriteLine("-- Retry + backoff + Timeout --");
+    Console.WriteLine("-- Retry + backoff + Timeout (Intent.Polly) --");
 
     var attempts = 0;
     Func<Task> request = async () =>
@@ -77,14 +79,13 @@ static async Task CombinedPolicies()
 {
     Console.WriteLine("-- Combined policies --");
 
-    await Intent.From(() => Console.WriteLine("  Named + Metrics + Retry + Atomic"))
+    await Intent.From(() => Console.WriteLine("  Named + Trace + Retry + Atomic"))
         .WithNamed("CombinedDemo")
-        .WithMetrics()
+        .WithTrace()
         .WithAtomicOn("combined")
         .WithRetry(3)
         .WithTimeout(10.Seconds());
 
-    Console.WriteLine($"  metrics count={IntentMetrics.GetCount("CombinedDemo")}");
     Console.WriteLine();
 }
 
@@ -136,8 +137,8 @@ static async Task IdempotentAndThenDemo()
     await Intent.From(() => { calls++; Console.WriteLine($"  idempotent body #{calls}"); })
         .WithIdempotent("ex-once", 5.Seconds());
 
-    await Intent.From(() => Console.WriteLine("  IntentProfile.Http"))
-        .WithPolicies(IntentProfile.Http("ex-http"));
+    await Intent.From(() => Console.WriteLine("  IntentPolly.Http"))
+        .WithPolicies(IntentPolly.Http("ex-http"));
 
     var n = await Intent.From(() => 21)
         .Then(x => Intent.From(() => x * 2))

@@ -21,14 +21,16 @@ Created → Configured → Scheduled → Running → Completed
 
 ## Configured
 
-После первого `Configure(...)`:
+После первого `With*` / `Configure(...)`:
 
 ```csharp
-intent.Configure(IntentPolicies.Retry(3), IntentPolicies.Timeout(5.Seconds()));
+intent.WithRetry(3).WithTimeout(5.Seconds());
+
+// низкоуровнево: intent.Configure(IntentPolly.Retry(3), IntentPolly.Timeout(5.Seconds()));
 ```
 
-Политики накапливаются в списке. Повторный `Configure` до старта — дополняет список.  
-`Configure` **после** `Scheduled`/`Running`/`Completed` бросает `InvalidOperationException`.
+Политики накапливаются в списке. Повторный `With*` / `Configure` до старта — дополняет список.  
+`With*` / `Configure` **после** `Scheduled`/`Running`/`Completed` бросает `InvalidOperationException`.
 
 ## Scheduled
 
@@ -66,7 +68,7 @@ intent.Configure(IntentPolicies.Retry(3), IntentPolicies.Timeout(5.Seconds()));
 | Действие | Код пользователя |
 |----------|------------------|
 | `var x = ProcessOrder()` | Нет |
-| `x.Configure(...)` | Нет |
+| `x.With*(...)` / `Configure(...)` | Нет |
 | передать `x` в другой метод | Нет |
 | `await x` | Да (через pipeline) |
 

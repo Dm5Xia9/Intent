@@ -12,7 +12,7 @@ public sealed class NamedPolicy : IntentPolicy
     }
 
     public string Name { get; }
-    public int Order => -15;
+    public int Order => IntentPipelineOrder.Named;
 
     public Func<CancellationToken, Task> Wrap(Func<CancellationToken, Task> next)
     {

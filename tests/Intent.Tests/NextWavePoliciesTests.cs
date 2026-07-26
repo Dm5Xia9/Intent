@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Threading.Channels;
 
 namespace Intents.Tests;
 
@@ -7,60 +8,8 @@ public class NextWavePoliciesTests
 {
     public NextWavePoliciesTests()
     {
-        IntentMetrics.Reset();
         IntentCacheStore.Clear();
         IntentDiagnostics.Reset();
-        CircuitBreakerPolicy.ResetAll();
-    }
-
-    [Fact]
-    public async Task Retry_attemptTimeout_fails_slow_attempt_and_retries()
-    {
-        var attempts = 0;
-        Func<Task> body = async () =>
-        {
-            attempts++;
-            if (attempts < 2)
-                await Task.Delay(200);
-        };
-
-        await Intent.From(body)
-            .WithRetry(3, attemptTimeout: 40.Milliseconds());
-
-        Assert.Equal(2, attempts);
-    }
-
-    [Fact]
-    public async Task CircuitBreaker_opens_after_threshold()
-    {
-        Func<Task> boom = () => throw new InvalidOperationException("x");
-
-        for (var i = 0; i < 3; i++)
-        {
-            await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-                await Intent.From(boom).WithCircuitBreaker("cb1", failureThreshold: 3, breakDuration: 5.Seconds()));
-        }
-
-        await Assert.ThrowsAsync<IntentCircuitOpenException>(async () =>
-            await Intent.From(boom).WithCircuitBreaker("cb1", failureThreshold: 3, breakDuration: 5.Seconds()));
-    }
-
-    [Fact]
-    public async Task CircuitBreaker_half_open_probe_can_close()
-    {
-        Func<Task> boom = () => throw new InvalidOperationException("x");
-        var policy = IntentPolicies.CircuitBreaker("cb2", failureThreshold: 2, breakDuration: 30.Milliseconds());
-
-        for (var i = 0; i < 2; i++)
-            await Assert.ThrowsAsync<InvalidOperationException>(async () => await Intent.From(boom).Configure(policy));
-
-        await Assert.ThrowsAsync<IntentCircuitOpenException>(async () =>
-            await Intent.From(boom).Configure(policy));
-
-        await Task.Delay(40);
-
-        await Intent.From(() => { }).Configure(policy);
-        await Intent.From(() => { }).Configure(policy);
     }
 
     [Fact]
@@ -109,12 +58,119 @@ public class NextWavePoliciesTests
     }
 
     [Fact]
+    public async Task Into_writes_result_to_channel()
+    {
+        var channel = Channel.CreateUnbounded<int>();
+
+        Intent.From(() => 42).Into(channel);
+
+        Assert.Equal(42, await channel.Reader.ReadAsync().AsTask().WaitAsync(2.Seconds()));
+    }
+
+    [Fact]
+    public async Task Into_writer_overload_and_fault_reports_trace()
+    {
+        var channel = Channel.CreateUnbounded<int>();
+        var faulted = new TaskCompletionSource();
+        IntentDiagnostics.Traced += e =>
+        {
+            if (e.Phase == IntentTracePhase.Faulted)
+                faulted.TrySetResult();
+        };
+
+        Intent.From((Func<int>)(() => throw new InvalidOperationException("into")))
+            .Into(channel.Writer);
+
+        await faulted.Task.WaitAsync(2.Seconds());
+        Assert.False(channel.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public async Task FromEach_runs_body_per_item()
+    {
+        var channel = Channel.CreateUnbounded<int>();
+        var seen = new List<int>();
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        channel.FromEach(
+            n => Intent.From(() => { lock (seen) seen.Add(n); }),
+            CancellationToken.None,
+            onCompleted: () => done.TrySetResult());
+
+        await channel.Writer.WriteAsync(1);
+        await channel.Writer.WriteAsync(2);
+        await channel.Writer.WriteAsync(3);
+        channel.Writer.TryComplete();
+
+        await done.Task.WaitAsync(2.Seconds());
+        Assert.Equal(new[] { 1, 2, 3 }, seen);
+    }
+
+    [Fact]
+    public async Task FromEach_into_forwards_results_and_completes_writer()
+    {
+        var input = Channel.CreateUnbounded<int>();
+        var output = Channel.CreateUnbounded<int>();
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        input.FromEach(
+            n => Intent.From(() => n * 10),
+            CancellationToken.None,
+            into: output.Writer,
+            onCompleted: () => done.TrySetResult());
+
+        await input.Writer.WriteAsync(2);
+        await input.Writer.WriteAsync(3);
+        input.Writer.TryComplete();
+
+        await done.Task.WaitAsync(2.Seconds());
+
+        Assert.Equal(20, await output.Reader.ReadAsync().AsTask().WaitAsync(2.Seconds()));
+        Assert.Equal(30, await output.Reader.ReadAsync().AsTask().WaitAsync(2.Seconds()));
+        await output.Reader.Completion.WaitAsync(2.Seconds());
+    }
+
+    [Fact]
+    public async Task FromEach_item_fault_reports_trace_and_continues()
+    {
+        var channel = Channel.CreateUnbounded<int>();
+        var seen = new List<int>();
+        var faults = 0;
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        IntentDiagnostics.Traced += e =>
+        {
+            if (e.Phase == IntentTracePhase.Faulted)
+                Interlocked.Increment(ref faults);
+        };
+
+        channel.FromEach(
+            n => Intent.From(() =>
+            {
+                if (n == 2)
+                    throw new InvalidOperationException("boom");
+                lock (seen) seen.Add(n);
+            }),
+            CancellationToken.None,
+            onCompleted: () => done.TrySetResult());
+
+        await channel.Writer.WriteAsync(1);
+        await channel.Writer.WriteAsync(2);
+        await channel.Writer.WriteAsync(3);
+        channel.Writer.TryComplete();
+
+        await done.Task.WaitAsync(2.Seconds());
+        Assert.Equal(new[] { 1, 3 }, seen);
+        Assert.True(faults >= 1);
+    }
+
+    [Fact]
     public async Task Activity_creates_diagnostic_activity()
     {
         Activity? seen = null;
         using var listener = new ActivityListener
         {
-            ShouldListenTo = s => s.Name == "Intents.Intent",
+            ShouldListenTo = s => s.Name == IntentInstrumentation.Name,
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
             ActivityStarted = a => seen = a
         };
@@ -125,27 +181,5 @@ public class NextWavePoliciesTests
 
         Assert.NotNull(seen);
         Assert.Equal("ActDemo", seen!.DisplayName);
-    }
-
-    [Fact]
-    public async Task Bulkhead_limits_parallelism()
-    {
-        var inFlight = 0;
-        var max = 0;
-
-        async Task Work()
-        {
-            Func<Task> body = async () =>
-            {
-                var n = Interlocked.Increment(ref inFlight);
-                max = Math.Max(max, n);
-                await Task.Delay(40);
-                Interlocked.Decrement(ref inFlight);
-            };
-            await Intent.From(body).WithBulkhead("bh", maxParallelism: 2);
-        }
-
-        await Task.WhenAll(Work(), Work(), Work(), Work());
-        Assert.Equal(2, max);
     }
 }

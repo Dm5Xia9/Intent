@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Intents.Polly</RootNamespace>
+    <AssemblyName>Intent.Polly</AssemblyName>
+
+    <IsPackable>true</IsPackable>
+    <PackageId>Intent.Polly</PackageId>
+    <Version>0.3.0</Version>
+    <Authors>Xia5dm9</Authors>
+    <Description>Polly v8 resilience adapter for Intent: WithRetry, WithTimeout, WithCircuitBreaker, WithBulkhead, and WithResilience.</Description>
+    <PackageTags>intent;polly;resilience;retry;timeout;circuit-breaker;bulkhead</PackageTags>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Intent\Intent.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+    <PackageReference Include="Polly.Core" Version="8.5.2" />
+    <PackageReference Include="Polly.RateLimiting" Version="8.5.2" />
+  </ItemGroup>
+
+</Project>

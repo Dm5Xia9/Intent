@@ -9,10 +9,10 @@
 
     <IsPackable>true</IsPackable>
     <PackageId>Intent</PackageId>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Authors>Xia5dm9</Authors>
-    <Description>Cold deferred-execution model for .NET: separate what to run from how to run it with a policy pipeline (retry, timeout, idempotency, bulkhead, and more).</Description>
-    <PackageTags>async;await;intent;policies;resilience;retry;timeout;pipeline</PackageTags>
+    <Description>Cold deferred-execution model for .NET: separate what to run from how to run it with a policy pipeline. Resilience (retry/timeout/CB) is in the Intent.Polly package.</Description>
+    <PackageTags>async;await;intent;policies;pipeline;deferred</PackageTags>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -25,14 +25,36 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Intent.Tests" />
+    <InternalsVisibleTo Include="Intent.Polly" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\CHANGELOG.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
+
+  <!-- Ship analyzers with the Intent package -->
+  <ItemGroup>
+    <ProjectReference Include="..\Intent.Analyzers\Intent.Analyzers.csproj"
+                      ReferenceOutputAssembly="false"
+                      OutputItemType="Analyzer"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_PackIntentAnalyzers</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <Target Name="_PackIntentAnalyzers" DependsOnTargets="Build">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="$(MSBuildThisFileDirectory)..\Intent.Analyzers\bin\$(Configuration)\netstandard2.0\Intent.Analyzers.dll"
+                              PackagePath="analyzers/dotnet/cs"
+                              Condition="Exists('$(MSBuildThisFileDirectory)..\Intent.Analyzers\bin\$(Configuration)\netstandard2.0\Intent.Analyzers.dll')" />
+    </ItemGroup>
+  </Target>
 
 </Project>

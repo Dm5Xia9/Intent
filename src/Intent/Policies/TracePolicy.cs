@@ -6,7 +6,7 @@ public sealed class TracePolicy : IntentPolicy
 
     private TracePolicy() { }
 
-    public int Order => -10;
+    public int Order => IntentPipelineOrder.Trace;
 
     public Func<CancellationToken, Task> Wrap(Func<CancellationToken, Task> next)
     {
@@ -51,3 +51,16 @@ public readonly record struct IntentTraceEvent(
     TimeSpan? Duration,
     Exception? Exception,
     IReadOnlyDictionary<string, object?>? Tags = null);
+
+/// <summary>
+/// Lightweight in-process callbacks for <see cref="TracePolicy"/>. Prefer OpenTelemetry
+/// (<see cref="IntentInstrumentation"/>) for production metrics and tracing.
+/// </summary>
+public static class IntentDiagnostics
+{
+    public static event Action<IntentTraceEvent>? Traced;
+
+    public static void Reset() => Traced = null;
+
+    internal static void EmitTrace(IntentTraceEvent e) => Traced?.Invoke(e);
+}

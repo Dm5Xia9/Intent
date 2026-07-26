@@ -1,5 +1,10 @@
 # Кейсы и антипаттерны
 
+Примеры с Retry/Timeout/CB предполагают `using Intents.Polly;`.
+`N.Seconds()` / `N.Milliseconds()` — `using Intents.Time;`.
+
+Предпочтительный способ навешивать политики — **builder API** (`With*`). `Configure(...)` остаётся низкоуровневым API для массива `IntentPolicy`.
+
 ## Где Intent помогает
 
 ### 1. Бизнес-операция с разными режимами запуска
@@ -14,22 +19,20 @@ await Checkout(cart);
 await Checkout(cart)
     .WithNamed("Checkout")
     .WithActivity()
-    .WithMetrics()
     .WithRetry(5, IntentBackoff.Exponential(200.Milliseconds()), attemptTimeout: 3.Seconds())
     .WithTimeout(30.Seconds())
     .WithCancel(ct);
 ```
 
-Один метод — несколько профилей исполнения. Для типового HTTP: `IntentProfile.Http("Checkout")`.
+Один метод — несколько профилей исполнения. Для типового HTTP: `IntentPolly.Http("Checkout")`.
 
 ### 1b. Идемпотентный side effect
 
 ```csharp
 await Intent.From(() => Charge(cmd))
-    .Configure(
-        IntentPolicies.Idempotent($"pay:{cmd.IdempotencyKey}"),
-        IntentPolicies.Retry(3),
-        IntentPolicies.Timeout(10.Seconds()));
+    .WithIdempotent($"pay:{cmd.IdempotencyKey}")
+    .WithRetry(3)
+    .WithTimeout(10.Seconds());
 ```
 
 Повтор с тем же ключом не спишет дважды; параллельные запросы делят один run.
@@ -45,22 +48,19 @@ await Intent.Atomically(() =>
 
 // Разные ресурсы — разные ключи
 await Intent.Atomically("wallet:42", () => Debit(42));
-await Transfer().Configure(IntentPolicies.AtomicOn("account:7"));
+await Transfer().WithAtomicOn("account:7");
 ```
 
 Структуры остаются простыми; синхронизация — политика.
 
-### 3. Cross-cutting без builder-API
+### 3. Cross-cutting снаружи тела
 
 ```csharp
 await LoadProfile(userId)
-    .Configure(
-        IntentPolicies.Named("LoadProfile"),
-        IntentPolicies.Trace,
-        IntentPolicies.Activity,
-        IntentPolicies.Metrics,
-        IntentPolicies.Cache($"profile:{userId}", 30.Seconds())
-    );
+    .WithNamed("LoadProfile")
+    .WithTrace()
+    .WithActivity()
+    .WithCache($"profile:{userId}", 30.Seconds());
 ```
 
 Имя, трасса, Activity, метрики и кеш навешиваются снаружи — тело метода не знает об этом.
@@ -69,14 +69,12 @@ await LoadProfile(userId)
 
 ```csharp
 await Intent.From(async ct => await http.GetAsync(url, ct))
-    .Configure(
-        IntentPolicies.Named("HttpGet"),
-        IntentPolicies.CircuitBreaker("payments-api"),
-        IntentPolicies.Bulkhead("http", maxParallelism: 32),
-        IntentPolicies.Retry(3, attemptTimeout: 1.Seconds()),
-        IntentPolicies.Timeout(5.Seconds()),
-        IntentPolicies.Cancel(ct)
-    );
+    .WithNamed("HttpGet")
+    .WithCircuitBreaker("payments-api")
+    .WithBulkhead("http", maxParallelism: 32)
+    .WithRetry(3, attemptTimeout: 1.Seconds())
+    .WithTimeout(5.Seconds())
+    .WithCancel(ct);
 ```
 
 - **CircuitBreaker** — fail-fast, когда зависимость уже лежит.
@@ -90,7 +88,8 @@ var batch = orders.Select(o => Process(o)).ToList();
 if (dryRun) return;
 
 await Intent.WhenAll(batch.ToArray())
-    .Configure(IntentPolicies.Bulkhead("orders", 8), IntentPolicies.Retry(2));
+    .WithBulkhead("orders", 8)
+    .WithRetry(2);
 ```
 
 С `Task` к моменту `Select` работа уже могла стартовать.
@@ -103,7 +102,40 @@ await Intent.Sequence(Validate(), Save(), Notify());
 await Intent.WhenAll(WarmCacheA(), WarmCacheB());
 
 // Явный background с отчётом об ошибке в IntentDiagnostics
-RefreshAsync().Configure(IntentPolicies.Retry(2)).Background();
+RefreshAsync().WithRetry(2).Background();
+```
+
+### 6b. Фон → канал (`Into`) и канал → Intent (`FromEach`)
+
+`Into` — положить результат Intent в канал. `FromEach` — наоборот: в фоне читать канал и на каждый элемент строить/await’ить Intent.
+
+```csharp
+using System.Threading.Channels;
+
+var results = Channel.CreateUnbounded<OrderDto>();
+var done = Channel.CreateUnbounded<Receipt>();
+
+// producer
+FetchOrder(id).WithRetry(2).Into(results);
+
+// consumer: каждый item → Intent (опционально сразу в следующий канал)
+results.FromEach(
+    order => Process(order).WithRetry(2),
+    ct,
+    into: done.Writer,
+    onCompleted: () => Console.WriteLine("drain done"));
+```
+
+`Into`: schedule без await; ошибка → `IntentDiagnostics`; канал **не** закрывается (`Complete`).  
+`FromEach`: обязательный `CancellationToken`; ошибка на одном item → diagnostics, цикл **продолжается**; при завершении reader’а вызывается `onCompleted`, а `into` (если задан) закрывается через `Complete`.
+
+Полный runnable пример: **[examples/Intent.ChannelPipeline](../examples/Intent.ChannelPipeline)**.
+
+```csharp
+foreach (var id in ids)
+    Load(id).WithTimeout(5.Seconds()).Into(inbox);
+
+inbox.FromEach(item => Handle(item).WithNamed("handle"), ct);
 ```
 
 ### 7. Тесты политик отдельно от домена
@@ -112,7 +144,7 @@ RefreshAsync().Configure(IntentPolicies.Retry(2)).Background();
 
 ```csharp
 await Intent.From(Flaky)
-    .Configure(IntentPolicies.Retry(3, shouldRetry: ex => ex is HttpRequestException));
+    .WithRetry(3, shouldRetry: ex => ex is HttpRequestException);
 ```
 
 ## Где Intent не нужен
@@ -120,16 +152,16 @@ await Intent.From(Flaky)
 - Простой I/O в ASP.NET без политик: `return await db.SaveAsync()`.
 - Библиотека с контрактом `Task`/`ValueTask` для всех потребителей.
 - Микрооптимизации tight loop.
-- Уже есть Polly/workflow engine и команда ими живёт — не плодить вторую абстракцию без нужды.
+- Нужен только resilience без cold plan — используйте Polly напрямую; Intent + Intent.Polly — когда нужен cold Intent поверх того же Polly.
 
 ## Антипаттерны
 
-### Навесить Configure после старта
+### Навесить With* / Configure после старта
 
 ```csharp
 var i = Work();
 await i;
-i.Configure(IntentPolicies.Retry(3)); // бросит
+i.WithRetry(3); // бросит
 ```
 
 ### Думать, что Atomic / AtomicOn / Bulkhead / Circuit / Cache — распределённые
@@ -140,21 +172,23 @@ i.Configure(IntentPolicies.Retry(3)); // бросит
 
 Timeout (и `attemptTimeout`) ограничивают **ожидание**. Код без cooperative cancel / без `CancellationToken` может доработать в фоне. Для отмены тела используйте `Intent.From(async ct => ...)` + `Cancel`/`Timeout`.
 
-### Забытый Intent без Background
+### Забытый Intent без Background / Into / FromEach
 
 ```csharp
 _ = ProcessOrder(); // план создан — работа не началась
-ProcessOrder().Background(); // так: schedule + ошибки в diagnostics
+ProcessOrder().Background(); // schedule + ошибки в diagnostics
+Load(id).Into(channel);      // schedule + результат в канал
+channel.FromEach(x => Handle(x), ct); // schedule consumer
 ```
 
 ### Политики на WhenAll ≠ политики на детях
 
 ```csharp
-await Intent.WhenAll(a, b).Configure(IntentPolicies.Retry(3));
+await Intent.WhenAll(a, b).WithRetry(3);
 // Retry оборачивает весь WhenAll, а не каждый из a/b отдельно
 ```
 
-Если нужен ретрай на каждый child — вешайте `Configure` на `a` и `b`.
+Если нужен ретрай на каждый child — вешайте `WithRetry` на `a` и `b`.
 
 ### Заменить все Task на Intent «для красоты»
 
@@ -184,5 +218,11 @@ Intent — для **операций с политиками**, не для ка
   → WhenAll / Sequence
 
 Fire-and-forget?
-  → .Background()   (не просто _)
+  → .Background()
+
+Фон + результат в Channel?
+  → Intent<T>.Into(channel)
+
+Канал → Intent на каждый item?
+  → channel.FromEach(x => Handle(x), ct)
 ```

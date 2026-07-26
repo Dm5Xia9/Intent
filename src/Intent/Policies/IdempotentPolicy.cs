@@ -5,6 +5,7 @@ namespace Intents;
 /// <summary>
 /// Deduplicates executions by key: concurrent callers share one run; successful results
 /// are remembered for <see cref="Ttl"/>. Failures do not stick — a later call may retry.
+/// Implemented entirely via <see cref="Wrap"/> (no runner special-case).
 /// </summary>
 public sealed class IdempotentPolicy : IntentPolicy
 {
@@ -21,10 +22,35 @@ public sealed class IdempotentPolicy : IntentPolicy
     public TimeSpan Ttl { get; }
 
     /// <summary>Outside Cache so an idempotent hit never touches the inner stack.</summary>
-    public int Order => -4;
+    public int Order => IntentPipelineOrder.Idempotent;
 
-    /// <summary>Logic lives in <see cref="Intent"/> / <see cref="Intent{T}"/> pipeline runners.</summary>
-    public Func<CancellationToken, Task> Wrap(Func<CancellationToken, Task> next) => next;
+    public Func<CancellationToken, Task> Wrap(Func<CancellationToken, Task> next)
+    {
+        var key = Key;
+        var ttl = Ttl;
+        return async ct =>
+        {
+            var bridge = IntentResultAccess.Current;
+            if (bridge is null)
+            {
+                await IntentIdempotencyStore.RunVoidAsync(key, ttl, next, ct).ConfigureAwait(false);
+                return;
+            }
+
+            var (fromStore, value) = await IntentIdempotencyStore.RunResultAsync<object?>(
+                key,
+                ttl,
+                async token =>
+                {
+                    await next(token).ConfigureAwait(false);
+                    return bridge.CaptureResultAfterBody();
+                },
+                ct).ConfigureAwait(false);
+
+            if (fromStore)
+                bridge.SetStoredResult(value);
+        };
+    }
 }
 
 internal static class IntentIdempotencyStore

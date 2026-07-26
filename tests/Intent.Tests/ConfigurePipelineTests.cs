@@ -6,7 +6,7 @@ public class ConfigurePipelineTests
     [Fact]
     public async Task Configure_attaches_policies_before_schedule()
     {
-        var intent = Intent.From(() => { }).WithRetry(2);
+        var intent = Intent.From(() => { }).WithNamed("cfg");
         Assert.Equal(IntentLifecycle.Configured, intent.Lifecycle);
         await intent;
         Assert.Equal(IntentLifecycle.Completed, intent.Lifecycle);
@@ -18,6 +18,6 @@ public class ConfigurePipelineTests
         var intent = Intent.From(() => { });
         await intent;
 
-        Assert.Throws<InvalidOperationException>(() => intent.WithRetry(1));
+        Assert.Throws<InvalidOperationException>(() => intent.WithNamed("too-late"));
     }
 }

@@ -18,7 +18,7 @@ public sealed class AtomicPolicy : IntentPolicy
     private AtomicPolicy(string? key) => Key = key;
 
     public string? Key { get; }
-    public int Order => 3;
+    public int Order => IntentPipelineOrder.Atomic;
 
     public Func<CancellationToken, Task> Wrap(Func<CancellationToken, Task> next)
     {

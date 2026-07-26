@@ -6,6 +6,9 @@
 | [02-lifecycle.md](02-lifecycle.md) | Жизненный цикл от Created до Completed |
 | [03-pipeline.md](03-pipeline.md) | Pipeline: порядок и композиция |
 | [08-policies.md](08-policies.md) | Все политики подробно |
+| [09-sm-clone-contract.md](09-sm-clone-contract.md) | Контракт SM-clone / Retry / cancel-timeout |
+| [10-observability.md](10-observability.md) | Activity / Metrics / OTel / Jaeger / Aspire |
+| [CHANGELOG.md](../CHANGELOG.md) | Версии, breaking changes, freeze до/после 1.0 |
 | [04-vs-task.md](04-vs-task.md) | Intent vs Task: внутрянка, планировщик, await |
 | [05-internals.md](05-internals.md) | AsyncMethodBuilder, state machine, TCS |
 | [06-use-cases.md](06-use-cases.md) | Практические кейсы и антипаттерны |

@@ -4,21 +4,18 @@ using System.Runtime.ExceptionServices;
 namespace Intents;
 
 [AsyncMethodBuilder(typeof(IntentMethodBuilder))]
-public class Intent
+public class Intent : IntentPlan
 {
-    private readonly List<IntentPolicy> _policies = [];
     private readonly TaskCompletionSource _tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private Func<CancellationToken, Task>? _body;
-    private IAsyncStateMachine? _template;
-    private IAsyncStateMachine? _running;
-    private TaskCompletionSource? _smRun;
-    private IntentLifecycle _lifecycle = IntentLifecycle.Created;
-    private int _scheduleGate;
-    private ExceptionDispatchInfo? _edi;
 
     internal Intent() { }
 
-    public IntentLifecycle Lifecycle => _lifecycle;
+    /// <summary>
+    /// Cancellation linked by Cancel / Timeout policies for the currently executing intent body.
+    /// Prefer <c>From(async ct =&gt; …)</c> when possible; use this inside <c>async Intent</c> methods
+    /// that have no <see cref="CancellationToken"/> parameter. See docs/09-sm-clone-contract.md.
+    /// </summary>
+    public static CancellationToken CurrentCancellationToken => IntentAmbient.Token;
 
     public bool IsCompleted => _tcs.Task.IsCompleted;
 
@@ -119,7 +116,6 @@ public class Intent
 
     /// <summary>
     /// Runs <paramref name="action"/> under <see cref="IntentPolicies.Atomic"/>.
-    /// Named <c>Atomically</c> because <see cref="IntentPolicies.Atomic"/> is the policy used with <c>Configure</c> / <c>WithAtomic</c>.
     /// </summary>
     public static Intent Atomically(Action action) => From(action).Configure(IntentPolicies.Atomic);
 
@@ -185,33 +181,11 @@ public class Intent
 
     private static async Task AwaitAsTask(Intent intent) => await intent;
 
-    internal void SetBody(Func<CancellationToken, Task> body) => _body = body;
-
-    internal void BindStateMachine(IAsyncStateMachine stateMachine)
-    {
-        _template = stateMachine;
-        _body = ExecuteStateMachineAsync;
-    }
-
-    internal IAsyncStateMachine? GetBoundStateMachine() => _running ?? _template;
-
-    private async Task ExecuteStateMachineAsync(CancellationToken ct)
-    {
-        ct.ThrowIfCancellationRequested();
-        var template = _template ?? throw new InvalidOperationException("State machine is not bound.");
-        var sm = StateMachineClone.Clone(template);
-        _running = sm;
-        var run = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        _smRun = run;
-        sm.MoveNext();
-        await run.Task.ConfigureAwait(false);
-    }
-
     internal void SetResult()
     {
-        if (_template is not null)
+        if (HasStateMachineTemplate)
         {
-            _smRun?.TrySetResult();
+            CompleteStateMachineRun();
             return;
         }
 
@@ -220,36 +194,28 @@ public class Intent
 
     internal void SetException(Exception exception)
     {
-        if (_template is not null && _smRun is not null && !_smRun.Task.IsCompleted)
-        {
-            _smRun.TrySetException(exception);
+        if (TryFaultStateMachine(exception))
             return;
-        }
 
         FaultOuter(exception);
     }
 
     private void CompleteOuter()
     {
-        _lifecycle = IntentLifecycle.Completed;
+        SetLifecycle(IntentLifecycle.Completed);
         _tcs.TrySetResult();
     }
 
     private void FaultOuter(Exception exception)
     {
-        _lifecycle = IntentLifecycle.Completed;
-        _edi = ExceptionDispatchInfo.Capture(exception);
+        SetLifecycle(IntentLifecycle.Completed);
+        Edi = ExceptionDispatchInfo.Capture(exception);
         _tcs.TrySetException(exception);
     }
 
     public Intent Configure(params IntentPolicy[] policies)
     {
-        ArgumentNullException.ThrowIfNull(policies);
-        if (_lifecycle is IntentLifecycle.Scheduled or IntentLifecycle.Running or IntentLifecycle.Completed)
-            throw new InvalidOperationException("Cannot configure policies after the operation has been scheduled.");
-
-        _policies.AddRange(policies);
-        _lifecycle = IntentLifecycle.Configured;
+        ConfigureCore(policies);
         return this;
     }
 
@@ -261,26 +227,20 @@ public class Intent
 
     internal void Schedule()
     {
-        if (Interlocked.CompareExchange(ref _scheduleGate, 1, 0) != 0)
+        if (!TryBeginSchedule())
             return;
 
-        _lifecycle = IntentLifecycle.Scheduled;
         _ = RunPipelineAsync();
     }
 
     private async Task RunPipelineAsync()
     {
-        _lifecycle = IntentLifecycle.Running;
+        SetLifecycle(IntentLifecycle.Running);
         try
         {
-            var body = _body ?? throw new InvalidOperationException("Operation has no body.");
-            var pipeline = IntentPipeline.Build(_policies, body);
-            var idem = _policies.OfType<IdempotentPolicy>().LastOrDefault();
-            if (idem is not null)
-                await IntentIdempotencyStore.RunVoidAsync(idem.Key, idem.Ttl, pipeline, CancellationToken.None)
-                    .ConfigureAwait(false);
-            else
-                await pipeline(CancellationToken.None).ConfigureAwait(false);
+            var body = Body ?? throw new InvalidOperationException("Operation has no body.");
+            var pipeline = IntentPipeline.Build(Policies, body);
+            await pipeline(CancellationToken.None).ConfigureAwait(false);
             CompleteOuter();
         }
         catch (Exception ex)
@@ -291,8 +251,8 @@ public class Intent
 
     internal void GetResult()
     {
-        if (_edi is not null)
-            _edi.Throw();
+        if (Edi is not null)
+            Edi.Throw();
 
         _tcs.Task.GetAwaiter().GetResult();
     }
@@ -317,11 +277,4 @@ public readonly struct IntentAwaiter : ICriticalNotifyCompletion
     public void OnCompleted(Action continuation) => _intent.OnCompleted(continuation);
 
     public void UnsafeOnCompleted(Action continuation) => _intent.UnsafeOnCompleted(continuation);
-}
-
-public static class TimeSpanExtensions
-{
-    public static TimeSpan Seconds(this int value) => TimeSpan.FromSeconds(value);
-
-    public static TimeSpan Milliseconds(this int value) => TimeSpan.FromMilliseconds(value);
 }

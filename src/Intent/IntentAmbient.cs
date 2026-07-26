@@ -4,6 +4,7 @@ internal static class IntentAmbient
 {
     private static readonly AsyncLocal<string?> NameCurrent = new();
     private static readonly AsyncLocal<Dictionary<string, object?>?> TagsCurrent = new();
+    private static readonly AsyncLocal<CancellationToken?> TokenCurrent = new();
 
     public static string Name
     {
@@ -11,8 +12,25 @@ internal static class IntentAmbient
         set => NameCurrent.Value = value;
     }
 
+    /// <summary>
+    /// Pipeline cancellation (Cancel / Timeout linked CTS). Prefer an explicit
+    /// <see cref="CancellationToken"/> parameter on <c>From(async ct =&gt; …)</c>; for
+    /// <c>async Intent</c> methods without a parameter, read this token.
+    /// </summary>
+    public static CancellationToken Token => TokenCurrent.Value ?? CancellationToken.None;
+
     public static IReadOnlyDictionary<string, object?> Tags =>
         TagsCurrent.Value ?? EmptyTags.Instance;
+
+    public static CancellationToken? PushToken(CancellationToken token)
+    {
+        var previous = TokenCurrent.Value;
+        TokenCurrent.Value = token;
+        return previous;
+    }
+
+    public static void RestoreToken(CancellationToken? previous) =>
+        TokenCurrent.Value = previous;
 
     /// <summary>
     /// Merges <paramref name="tags"/> onto a copy of the current tag map. Returns previous map for restore.

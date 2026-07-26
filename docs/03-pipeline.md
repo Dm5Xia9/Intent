@@ -11,35 +11,37 @@ Cancel
                       └─ Metrics
                            └─ Idempotent
                                 └─ Cache
-                                     └─ CircuitBreaker
-                                          └─ Timeout
-                                               └─ Retry (+ optional attemptTimeout)
-                                                    └─ Bulkhead
+                                     └─ CircuitBreaker   ← Intent.Polly
+                                          └─ Timeout     ← Intent.Polly
+                                               └─ Retry  ← Intent.Polly
+                                                    └─ Bulkhead ← Intent.Polly
                                                          └─ Atomic
                                                               └─ Before
                                                                    └─ After
                                                                         └─ user code
 ```
 
-| Политика | Order |
-|----------|-------|
-| Cancel | -20 |
-| Named | -15 |
-| Tag | -14 |
-| Trace | -10 |
-| Activity | -8 |
-| Metrics | -5 |
-| Idempotent | -4 |
-| Cache | -3 |
-| CircuitBreaker | -2 |
-| Timeout | 0 |
-| Retry | 1 |
-| Bulkhead | 2 |
-| Atomic | 3 |
-| Before | 4 |
-| After | 5 |
+| Политика | Order | Пакет |
+|----------|-------|-------|
+| Cancel | -20 | core |
+| Named | -15 | core |
+| Tag | -14 | core |
+| Trace | -10 | core |
+| Activity | -8 | core |
+| Metrics | -5 | core |
+| Idempotent | -4 | core |
+| Cache | -3 | core |
+| CircuitBreaker | -2 | Intent.Polly |
+| Timeout | 0 | Intent.Polly |
+| Retry | 1 | Intent.Polly |
+| Bulkhead | 2 | Intent.Polly |
+| Atomic | 3 | core |
+| Before | 4 | core |
+| After | 5 | core |
 
-Порядок аргументов в `Configure` не важен.
+Порядок аргументов в `With*` / `Configure` не важен.
+
+**Стабильность.** Числовые `Order` зафиксированы в `IntentPipelineOrder`. Менять порядок — breaking change (до 1.0 только с записью в [CHANGELOG](../CHANGELOG.md); с 1.0 — major bump).
 
 Подробно по каждой политике: **[08-policies.md](08-policies.md)**.
 
@@ -55,4 +57,4 @@ Cancel
 
 ## Композиция планов
 
-`WhenAll` / `Sequence` / `Background` / `Then` / `Select` — не политики, а фабрики/расширения над `Intent`. Политики на композите оборачивают весь агрегат. Готовые наборы: `IntentProfile.Http` / `DbWrite`.
+`WhenAll` / `Sequence` / `Background` / `Into` / `FromEach` / `Then` / `Select` — не политики, а фабрики/расширения над `Intent`. Политики на композите оборачивают весь агрегат. Готовые наборы: `IntentPolly.Http` / `DbWrite`.

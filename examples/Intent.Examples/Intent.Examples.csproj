@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Intent\Intent.csproj" />
+    <ProjectReference Include="..\..\src\Intent.Polly\Intent.Polly.csproj" />
   </ItemGroup>
 
 </Project>

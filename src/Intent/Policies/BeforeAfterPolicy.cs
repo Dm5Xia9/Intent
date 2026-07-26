@@ -1,7 +1,7 @@
 namespace Intents;
 
 /// <summary>
-/// Runs a hook immediately before the intent body (inside Retry / Bulkhead / Atomic).
+/// Runs a hook immediately before the intent body (inside Atomic / After resilience layers).
 /// Re-executes on every Retry attempt.
 /// </summary>
 public sealed class BeforePolicy : IntentPolicy
@@ -14,7 +14,7 @@ public sealed class BeforePolicy : IntentPolicy
         _hook = hook;
     }
 
-    public int Order => 4;
+    public int Order => IntentPipelineOrder.Before;
 
     public Func<CancellationToken, Task> Wrap(Func<CancellationToken, Task> next)
     {
@@ -29,7 +29,7 @@ public sealed class BeforePolicy : IntentPolicy
 
 /// <summary>
 /// Runs a hook immediately after each attempt of the intent body (success or fault),
-/// inside Retry / Bulkhead / Atomic. Re-executes on every Retry attempt.
+/// inside Atomic. When used with Intent.Polly retry, re-executes on every attempt.
 /// </summary>
 public sealed class AfterPolicy : IntentPolicy
 {
@@ -41,7 +41,7 @@ public sealed class AfterPolicy : IntentPolicy
         _hook = hook;
     }
 
-    public int Order => 5;
+    public int Order => IntentPipelineOrder.After;
 
     public Func<CancellationToken, Task> Wrap(Func<CancellationToken, Task> next)
     {

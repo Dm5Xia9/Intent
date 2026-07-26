@@ -69,7 +69,7 @@ _body = ExecuteStateMachineAsync;
 3. `clone.MoveNext()`.
 4. Ждёт `_smRun`.
 
-Так `await Flaky().Configure(IntentPolicies.Retry(3))` работает без `FromFactory`: каждая попытка — свежая state machine с capturenными аргументами исходного вызова.
+Так `await Flaky().WithRetry(3)` работает без `FromFactory`: каждая попытка — свежая state machine с capturenными аргументами исходного вызова.
 
 Когда SM доходит до конца, builder зовёт `SetResult`/`SetException` → завершается `_smRun`, а не сразу внешний TCS. Внешний TCS завершает `RunPipelineAsync` после выхода из pipeline (успех) или через `FaultOuter` (ошибка).
 
@@ -107,8 +107,14 @@ public IntentAwaiter GetAwaiter()
 
 ## Политики и CancellationToken
 
-`Wrap` принимает `CancellationToken`. Сейчас корневой вызов — `CancellationToken.None`.  
-`Timeout` использует `Task.WaitAsync(timeout)`, а не только cooperative cancel тела. Тело может продолжать фоновую работу после timeout на уровне ожидания — это ограничение MVP (как у многих timeout-обёрток без abort).
+`Wrap` принимает `CancellationToken`. Корневой вызов — `CancellationToken.None`.
+
+- **Cancel** — linked CTS (внешний + pipeline) → в `next` и `Intent.CurrentCancellationToken`.
+- **Timeout** (`Intent.Polly`) — `CancelAfter` на linked CTS **и** `WaitAsync`. Cooperative cancel для тел, которые слушают token; wall-clock для ожидания.
+
+Тело без проверки token может продолжить работу после timeout на уровне ожидания — это ограничение модели (нет thread abort). Контракт: **[09-sm-clone-contract.md](09-sm-clone-contract.md)**.
+
+Idempotent / Cache реализуются только через `Wrap` (через `IntentResultAccess` для `Intent{T}`), без special-case в `RunPipelineAsync`.
 
 ## Atomic
 
